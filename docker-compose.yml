@@ -1,0 +1,66 @@
+# Local stack: everything free and open source.
+#   docker compose up -d            # infrastructure + API
+#   uv run ledgerlens init-storage  # create blob container + jobs queue
+#   uv run alembic upgrade head     # create database tables
+# Foundry Local runs on the host, not in Docker (see .env.example).
+# The worker and UI services are added in phases 2-3.
+
+name: ledgerlens
+
+services:
+  floci:
+    # Azure-compatible Blob, Queue, Table and Key Vault on :4577.
+    # TODO(phase 0): pin to a version once the smoke test passes (spec §15).
+    image: floci/floci-az:latest
+    ports: ["4577:4577"]
+    volumes: [floci-data:/app/data]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4577/health || curl -fs http://localhost:4577/health"]
+      interval: 10s
+      retries: 10
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ledgerlens
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ledgerlens}
+      POSTGRES_DB: ledgerlens
+    ports: ["5432:5432"]
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgerlens -d ledgerlens"]
+      interval: 5s
+      retries: 10
+
+  valkey:
+    # BSD-licensed, Redis-compatible (Redis 8 is AGPL/SSPL; see spec §10a).
+    image: valkey/valkey:8-alpine
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]  # cache only, no persistence
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports: ["16686:16686", "4317:4317"]
+
+  api:
+    build: .
+    command: ["uvicorn", "ledgerlens.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    env_file: [{path: .env, required: false}]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ledgerlens:${POSTGRES_PASSWORD:-ledgerlens}@postgres:5432/ledgerlens
+      CACHE_URL: redis://valkey:6379/0
+      AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://floci:4577/devstoreaccount1;QueueEndpoint=http://floci:4577/devstoreaccount1-queue;
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      valkey: {condition: service_healthy}
+      floci: {condition: service_started}
+
+volumes:
+  floci-data:
+  pg-data:

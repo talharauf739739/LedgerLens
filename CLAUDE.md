@@ -2,7 +2,7 @@
 
 Open-source (MIT) document intelligence for fintech: messy financial PDFs and scans in, grounded and validated JSON out. Every extracted value must point back to its source on the page. Full spec: [spec.md](spec.md).
 
-**Status:** design stage. The layout below is the target; most of it doesn't exist yet.
+**Status:** Phase 0. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`. The rest of the layout below is the target.
 
 ## Non-negotiable rules
 
@@ -49,11 +49,13 @@ infra/        Bicep for Azure
 tests/        unit, rules (hypothesis), golden snapshots
 ```
 
-## Commands (once the code exists)
+## Commands
 
 - `uv sync`: install dependencies
-- `uv run pytest`: run the tests (`tests/golden -k <doc_type>` for golden files)
-- `uv run ruff check . && uv run mypy ledgerlens`: lint and type-check
+- `uv run pytest`: unit tests (integration tests are excluded by default; `-m integration` runs them against the compose stack)
+- `uv run ruff check . && uv run ruff format --check . && uv run mypy ledgerlens`: lint, format and type-check (mypy is strict). CI runs all of these plus a license gate and gitleaks.
+- `uv run ledgerlens hello`: send one prompt through the configured LLM provider
+- `uv run ledgerlens init-storage`: create the blob container and jobs queue
 - `docker compose up`: Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI
 - `uv run alembic upgrade head`: apply database migrations
 - `uv run python -m eval --dataset <name>`: evaluation report

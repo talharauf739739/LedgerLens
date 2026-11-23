@@ -6,7 +6,23 @@ LedgerLens is open-source document intelligence for fintech. It turns messy fina
 
 It is built to run fully locally and free (Foundry Local + Floci-az + open-source OCR), and to move to Azure AI Foundry with a config switch.
 
-> **Status:** early design (v0.1). See [spec.md](spec.md) for the full specification. No code has landed yet.
+> **Status:** Phase 0 (foundations). Config, LLM provider abstraction, storage/DB/cache wrappers, health API, migrations and CI are in place; extraction comes next. See [spec.md](spec.md) for the full specification.
+
+## Quickstart
+
+Needs Python 3.12, [uv](https://docs.astral.sh/uv/), Docker, and [Foundry Local](https://github.com/microsoft/Foundry-Local) (or Ollama).
+
+```bash
+cp .env.example .env
+uv sync                          # install dependencies
+docker compose up -d             # Floci-az, PostgreSQL, Valkey, Jaeger, API
+uv run alembic upgrade head      # create database tables
+uv run ledgerlens init-storage   # create blob container + jobs queue
+uv run ledgerlens hello          # one prompt through the configured LLM
+curl localhost:8000/readyz       # every backing service should report "ok"
+```
+
+Run the checks with `uv run pytest` (unit) and `uv run pytest -m integration` (needs the compose stack).
 
 ## Why
 
