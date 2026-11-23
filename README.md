@@ -6,7 +6,7 @@ LedgerLens is open-source document intelligence for fintech. It turns messy fina
 
 It is built to run fully locally and free (Foundry Local + Floci-az + open-source OCR), and to move to Azure AI Foundry with a config switch.
 
-> **Status:** early design (v0.1). See [SPEC.md](SPEC.md) for the full specification. No code has landed yet.
+> **Status:** early design (v0.1). See [spec.md](spec.md) for the full specification. No code has landed yet.
 
 ## Why
 
@@ -72,4 +72,4 @@ LedgerLens uses **synthetic or public data only**. Datasets are downloaded into 
 
 ## License
 
-MIT (planned). Core dependencies must be MIT-compatible, so GPL/AGPL libraries are avoided.
+MIT, see [LICENSE](LICENSE). Core dependencies must be MIT-compatible, so GPL/AGPL libraries are avoided.

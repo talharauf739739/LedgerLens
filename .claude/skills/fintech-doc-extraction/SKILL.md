@@ -1,8 +1,9 @@
-Name
-fintech-doc-extraction
-Description
-Add or improve a fintech document type in LedgerLens (bank statement, invoice, receipt, pay slip, W-2, or a new one). Use when the user asks to support a new document, change an extraction schema, add validation rules, generate synthetic test documents, tune extraction prompts, or debug wrong or ungrounded extracted fields.
-Fintech document extraction (LedgerLens)
+---
+name: fintech-doc-extraction
+description: Add or improve a fintech document type in LedgerLens (bank statement, invoice, receipt, pay slip, W-2, or a new one). Use when the user asks to support a new document, change an extraction schema, add validation rules, generate synthetic test documents, tune extraction prompts, or debug wrong or ungrounded extracted fields.
+---
+
+# Fintech document extraction (LedgerLens)
 Follow these steps in order whenever you add or change a document type. Read CLAUDE.md first; its non-negotiable rules (secrets, synthetic data only, MIT-compatible deps, Decimal money, grounding) apply throughout.
 
 1. Define the schema
