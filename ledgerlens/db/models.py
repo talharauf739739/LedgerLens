@@ -47,7 +47,11 @@ class Job(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    audit_events: Mapped[list[AuditEvent]] = relationship(back_populates="job")
+    # The FK is ON DELETE CASCADE in the database; let Postgres do it rather than having the
+    # ORM try to null out job_id (which is NOT NULL) on audit rows it hasn't loaded.
+    audit_events: Mapped[list[AuditEvent]] = relationship(
+        back_populates="job", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class AuditEvent(Base):
