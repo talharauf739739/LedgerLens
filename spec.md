@@ -55,7 +55,10 @@ Swap in a tampered statement. Reconciliation fails ❌ and the field is flagged 
           │  • Blob  (raw docs, page images, results)    │
           │  • Queue (extraction jobs)                   │
           │  • Key Vault (secrets)                       │
-          │  • Table/Cosmos (job + result metadata)      │
+          ├──────────────────────────────────────────────┤
+          │  Open-source services (same locally + cloud) │
+          │  • PostgreSQL (jobs, results, audit, review) │
+          │  • Valkey/Redis (cache, rate limits, status) │
           └──────────────┬───────────────────────────────┘
                          │ worker pulls job
                          ▼
@@ -183,7 +186,7 @@ No secrets in git. Commit only .env.example. .env is git-ignored. gitleaks runs 
 Secrets at runtime: Floci Key Vault locally, Azure Key Vault in the cloud, both through azure-keyvault-secrets. In the cloud, use managed identity (DefaultAzureCredential). No keys in app settings.
 PII: Microsoft Presidio (MIT) masks account numbers, SSNs and emails before anything is logged or sent to a cloud LLM. Store only masked account numbers.
 Uploads: size limit (20 MB), MIME sniffing, page cap (50), files kept 24 h in the demo and then purged.
-API: API-key auth for the demo (hashed in storage); rate limiting (slowapi); CORS locked to the UI origin.
+API: API-key auth for the demo (hashed in PostgreSQL); rate limiting (slowapi, counters in Valkey); CORS locked to the UI origin. Nginx in front enforces the 20 MB body limit and TLS.
 LLM safety: treat document text as untrusted (prompt-injection in PDFs). The system prompt forbids following instructions found in documents. Output must match the JSON schema or it's rejected.
 Audit log: every job records the model, prompt version, rule results and the reviewer's decision.
 10. Tech stack
@@ -196,19 +199,42 @@ Agents	Microsoft Agent Framework (Python)
 LLM	Foundry Local / Ollama / Azure AI Foundry via the OpenAI-compatible client
 OCR / layout	Docling, PaddleOCR or RapidOCR, Tesseract, pypdfium2, pdfplumber, OpenCV
 Cloud emulation	Floci-az (Docker)
-Storage SDKs	azure-storage-blob, azure-storage-queue, azure-data-tables, azure-keyvault-secrets
+Storage SDKs	azure-storage-blob, azure-storage-queue, azure-keyvault-secrets
+Database	PostgreSQL 17; SQLAlchemy 2 (MIT) + asyncpg (Apache-2.0); Alembic (MIT) migrations
+Cache	Valkey 8 (BSD-3, Redis-compatible) via redis-py (MIT)
+Reverse proxy	Nginx (BSD-2) + certbot on the VM
 PII	Presidio
 Observability	OpenTelemetry → Jaeger locally, Azure Monitor in the cloud
 Tests	pytest, hypothesis (rule property tests), golden-file snapshot tests
 Quality	ruff, mypy, pre-commit, gitleaks, pip-licenses
-Packaging	Docker + docker-compose; GitHub Actions CI
+Packaging	Docker + docker-compose; GitHub Actions CI on ubuntu-latest; images on GHCR; Helm chart (post-MVP)
+10a. Free and open-source infrastructure
+Principle: everything needed to build, run and demo LedgerLens is free and open source. A paid cloud service is only ever an optional swap-in for a free one, never a requirement.
+
+Tool	Role in LedgerLens	Local	Cloud equivalent
+Linux	Runtime for every container and the demo VM; CI runs on ubuntu-latest	Docker Desktop / WSL2	Ubuntu VM, Container Apps
+Docker	One docker compose up starts the whole stack	docker-compose.yml	Same images on GHCR
+Kubernetes	Post-MVP scale-out path: Helm chart for API, worker, UI	k3s / kind	AKS
+Git & GitHub	Source, issues, Actions CI, GHCR images, releases	—	—
+Python	The only application language (3.12, uv)	—	—
+PostgreSQL	System of record: jobs, results JSON (JSONB), audit log, review queue, API-key hashes	postgres:17 container	Azure Database for PostgreSQL Flexible Server
+Redis (Valkey)	OCR/LLM result cache keyed by page hash, slowapi rate-limit counters, job progress pub/sub for the UI	valkey:8 container	Azure Managed Redis
+Nginx	Reverse proxy, TLS, 20 MB upload limit, serves the UI and API under one origin	nginx container (optional locally)	Container Apps ingress
+Java	Not used. Keeping one language keeps the stack small. Docling and the OCR engines don't need a JVM.	—	—
+
+Why these choices:
+PostgreSQL instead of Table/Cosmos. The audit log and review queue need real queries (by status, by reviewer, by date) and transactions. Postgres runs identically on a laptop and in Azure.
+Valkey instead of Redis itself. Redis 8 is licensed RSALv2/SSPL/AGPLv3, which conflicts with the no-AGPL rule. Valkey is the BSD-licensed fork and is wire-compatible, so redis-py and any managed Redis still work.
+Azure Queue stays for jobs. Keeping the job queue on the Azure Queue API (Floci locally) preserves the one-switch move to Azure. Redis is a cache, never the source of truth: losing it must not lose a job.
+Nginx instead of Caddy. It's the more common choice and worth learning; certbot handles TLS.
 11. Deployment options
 Option	Cost	LLM	Notes
-A. Laptop (dev)	Free	Foundry Local	docker compose up runs Floci, API, worker and UI. Foundry Local runs on the host.
+A. Laptop (dev)	Free	Foundry Local	docker compose up runs Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI. Foundry Local runs on the host.
 B. Streamlit Community Cloud (UI only)	Free	Remote API	The UI calls an API hosted elsewhere. You can't run OCR models or a local LLM there.
-C. Single Linux VM (demo)	~$15–40/mo (or Azure free credit)	Ollama on the VM	One VM running docker compose; Caddy for HTTPS. Best "real URL" demo.
-D. Azure (cloud mode)	Pay as you go	Azure AI Foundry	Container Apps (API, worker, UI), Blob, Queue, Key Vault, managed identity, Bicep in infra/.
-Start with A, show founders C, and keep D as "here's the production path".
+C. Single Linux VM (demo)	~$15–40/mo (or Azure free credit)	Ollama on the VM	One Ubuntu VM running docker compose; Nginx + certbot for HTTPS. Best "real URL" demo.
+D. Azure (cloud mode)	Pay as you go	Azure AI Foundry	Container Apps (API, worker, UI), Blob, Queue, Key Vault, PostgreSQL Flexible Server, Managed Redis, managed identity, Bicep in infra/.
+E. Kubernetes (post-MVP)	Free (k3s) or pay as you go (AKS)	Ollama / Azure AI Foundry	Helm chart in deploy/helm/; the worker scales out on queue length.
+Start with A, show founders C, and keep D (and later E) as "here's the production path".
 
 12. Repo layout
 ledgerlens/
@@ -217,7 +243,7 @@ ledgerlens/
 ├── LICENSE                     # MIT
 ├── README.md
 ├── .env.example
-├── docker-compose.yml          # floci-az, api, worker, ui, jaeger
+├── docker-compose.yml          # floci-az, postgres, valkey, jaeger, api, worker, ui
 ├── pyproject.toml
 ├── .claude/skills/fintech-doc-extraction/SKILL.md
 ├── ledgerlens/
@@ -238,7 +264,7 @@ ledgerlens/
 └── tests/
 13. Milestones
 Phase	Week	Deliverable	Learning focus
-0	1	Repo, CI, docker-compose with Floci, Foundry Local "hello"	Floci, Foundry Local, uv
+0	1	Repo, CI, docker-compose with Floci, PostgreSQL and Valkey; Foundry Local "hello"	Floci, Foundry Local, uv, Docker, Postgres
 1	1–2	Synthetic generator for bank statements and invoices with ground truth	ReportLab, Faker, data design
 2	2–3	Parse/OCR → Markdown with bboxes; baseline LLM extraction	Docling, PaddleOCR, layout
 3	3–4	Agent workflow, grounding, rules, review UI	Agent Framework, validation
@@ -257,3 +283,4 @@ Ask: feedback, design partners (a lender or an AP team), or a role building it.
 Is Foundry Local available on the demo VM's OS? If not, use Ollama there (that's the plan).
 Which Floci-az services and SDK versions are verified? Run a smoke test in phase 0.
 Is a small vision LLM (e.g. Qwen2.5-VL) worth adding for checkboxes and handwriting? Decide after phase 4.
+Pin the floci/floci-az image to a version once the phase-0 smoke test passes (compose starts on :latest).

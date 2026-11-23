@@ -53,7 +53,9 @@ Money is always stored as decimal strings, never floats.
 
 ## Planned stack
 
-Python 3.12 · uv · FastAPI · Streamlit · Microsoft Agent Framework · Docling · Floci-az (local Azure emulation) · Presidio (PII masking) · OpenTelemetry · pytest · Docker Compose
+Python 3.12 · uv · FastAPI · Streamlit · Microsoft Agent Framework · Docling · PostgreSQL · Valkey (Redis-compatible) · Floci-az (local Azure emulation) · Nginx · Presidio (PII masking) · OpenTelemetry · pytest · Docker Compose
+
+Everything needed to build, run and demo LedgerLens is free and open source. Paid cloud services are optional swap-ins, never requirements.
 
 ## Roadmap
 

@@ -14,10 +14,18 @@ Open-source (MIT) document intelligence for fintech: messy financial PDFs and sc
 6. **Agents propose; code decides.** The LLM fills schemas from what is printed. Deterministic Python rules do the math and decide acceptance. Agents never compute values that aren't printed.
 7. **Document text is untrusted.** Prompts must forbid following instructions found inside documents, and output that doesn't match the JSON schema is rejected.
 8. **Mask PII** (Presidio) before anything is logged or sent to a cloud LLM. Store account numbers masked (`****1234`).
+9. **Free and open source by default.** Everything needed to build, run and demo the project must be free and open source (spec §10a). A paid service may only be an optional swap-in for a free one. Use Valkey, not Redis 8 (its license includes AGPL/SSPL). Python is the only application language: no Java or Node services.
+
+## Infrastructure roles (don't blur them)
+
+- **PostgreSQL** is the system of record: jobs, results (JSONB), audit log, review queue, API-key hashes. Schema changes go through Alembic migrations.
+- **Valkey/Redis** is a cache only: OCR/LLM results keyed by page hash, rate-limit counters, job progress pub/sub. Code must work if it's flushed, so never store anything there you can't recompute.
+- **Azure Queue** (Floci locally) carries extraction jobs. **Blob** holds raw documents, page images and result files. **Key Vault** holds secrets.
+- **Nginx** fronts the API and UI on the VM (TLS, 20 MB upload limit).
 
 ## Stack
 
-Python 3.12 with `uv` · FastAPI + Pydantic v2 · Streamlit · Microsoft Agent Framework · Docling, PaddleOCR/RapidOCR, Tesseract, pypdfium2, pdfplumber, OpenCV · rapidfuzz · Floci-az (local Azure emulation in Docker) · Presidio · OpenTelemetry · pytest + hypothesis · ruff, mypy, pre-commit
+Python 3.12 with `uv` · FastAPI + Pydantic v2 · Streamlit · Microsoft Agent Framework · Docling, PaddleOCR/RapidOCR, Tesseract, pypdfium2, pdfplumber, OpenCV · rapidfuzz · PostgreSQL 17 (SQLAlchemy 2 + asyncpg + Alembic) · Valkey 8 (redis-py) · Floci-az (local Azure emulation in Docker) · Nginx · Presidio · OpenTelemetry · pytest + hypothesis · ruff, mypy, pre-commit
 
 LLM access goes only through `ledgerlens/llm/provider.py` (`LLM_PROVIDER = foundry_local | ollama | azure_foundry`, all OpenAI-compatible). Don't hard-code the Foundry Local port; discover it with `foundry-local-sdk`. Verify model IDs against each catalog, since they change.
 
@@ -46,7 +54,8 @@ tests/        unit, rules (hypothesis), golden snapshots
 - `uv sync`: install dependencies
 - `uv run pytest`: run the tests (`tests/golden -k <doc_type>` for golden files)
 - `uv run ruff check . && uv run mypy ledgerlens`: lint and type-check
-- `docker compose up`: Floci, API, worker, UI and Jaeger
+- `docker compose up`: Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI
+- `uv run alembic upgrade head`: apply database migrations
 - `uv run python -m eval --dataset <name>`: evaluation report
 
 ## Working conventions

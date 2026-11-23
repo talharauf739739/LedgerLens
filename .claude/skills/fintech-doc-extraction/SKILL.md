@@ -48,6 +48,8 @@ If there's a public dataset for this type (e.g. CORD for receipts), add a loader
 7. Wire into the UI and API
 Add the type to the Streamlit sample picker (ui/samples.py) with one synthetic sample.
 Make sure /v1/extract?doc_type=<doc_type> returns the schema and the OpenAPI docs show it.
+Results are stored as JSONB in PostgreSQL, so a new type usually needs no migration. If you add a column or index (e.g. to filter the review queue by a type-specific field), add an Alembic migration in the same change.
+Cached OCR/LLM output in Valkey is keyed by page hash and prompt version. Bump the prompt version (step 4) so stale cached extractions aren't reused.
 Debugging wrong fields (checklist)
 Check the Markdown first. If the value is missing or garbled there, it's an OCR or layout problem. Try PaddleOCR vs Tesseract, check the page DPI (≥ 200) and deskewing.
 If the Markdown is fine but the JSON is wrong, it's an extraction problem. Check the prompt version and the model (small local models struggle with long tables; split by page).
