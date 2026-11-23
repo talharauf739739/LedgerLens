@@ -16,8 +16,10 @@ dependencies = [
     "foundry-local-sdk>=2.5.0",
     "httpx>=0.28.1",
     "openai>=3.57.0",
+    "pillow>=13.0.0",
     "pydantic>=2.14.4",
     "pydantic-settings>=2.16.3",
+    "pypdfium2>=5.15.2",
     "redis>=8.2.0",
     "sqlalchemy[asyncio]>=2.1.9",
     "uvicorn[standard]>=0.54.0",
@@ -39,10 +41,15 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S", "ASYNC", "RUF"]
-ignore = ["S101"]  # assert is fine in tests
+ignore = [
+    "S101",   # assert is fine in tests
+    "UP046",  # pydantic generics read more clearly with Generic[T]
+    "UP047",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/**" = ["E501"]
+"synth/**" = ["S311"]  # seeded RNG for reproducible fake data, not crypto
 
 [tool.mypy]
 python_version = "3.12"
@@ -51,7 +58,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["migrations/"]
 
 [[tool.mypy.overrides]]
-module = ["foundry_local.*"]
+module = ["foundry_local.*", "reportlab.*", "pypdfium2.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -63,11 +70,13 @@ addopts = "-m 'not integration'"
 
 [dependency-groups]
 dev = [
+    "faker>=40.63.0",
     "hypothesis>=6.170.17",
     "mypy>=2.4.1",
     "pip-licenses>=5.5.5",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
     "pytest-asyncio>=1.5.0",
+    "reportlab>=5.1.0",
     "ruff>=0.17.6",
 ]

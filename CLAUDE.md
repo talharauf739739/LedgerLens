@@ -2,7 +2,7 @@
 
 Open-source (MIT) document intelligence for fintech: messy financial PDFs and scans in, grounded and validated JSON out. Every extracted value must point back to its source on the page. Full spec: [spec.md](spec.md).
 
-**Status:** Phase 0. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`. The rest of the layout below is the target.
+**Status:** Phase 1 done. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`, `schemas/` and `rules/` (bank_statement, invoice), and `synth/` (generators with exact ground truth). Next is Phase 2 (parse/OCR). The rest of the layout below is the target.
 
 ## Non-negotiable rules
 
@@ -53,12 +53,19 @@ tests/        unit, rules (hypothesis), golden snapshots
 
 - `uv sync`: install dependencies
 - `uv run pytest`: unit tests (integration tests are excluded by default; `-m integration` runs them against the compose stack)
-- `uv run ruff check . && uv run ruff format --check . && uv run mypy ledgerlens`: lint, format and type-check (mypy is strict). CI runs all of these plus a license gate and gitleaks.
+- `uv run ruff check . && uv run ruff format --check . && uv run mypy ledgerlens synth`: lint, format and type-check (mypy is strict). CI runs all of these plus a license gate and gitleaks.
 - `uv run ledgerlens hello`: send one prompt through the configured LLM provider
 - `uv run ledgerlens init-storage`: create the blob container and jobs queue
+- `uv run python -m synth --count 20`: synthetic PDFs + `.truth.json` into `data/synth/` (clean, noisy, tampered)
 - `docker compose up`: Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI
 - `uv run alembic upgrade head`: apply database migrations
 - `uv run python -m eval --dataset <name>`: evaluation report
+
+## Ground-truth conventions
+
+- `bbox` is `[x0, y0, x1, y1]` in PDF points, **top-left origin**, `page` 1-based. Scans use the same space.
+- Truth files hold the stored form (identifiers masked); `synthetic.printed` holds the raw printed text per field for grounding tests.
+- `tests/test_synth.py` is the contract: clean docs pass every rule, tampered docs fail exactly `expected_failures`, and the PDF text inside every truth bbox equals what was printed. Keep it green when touching a generator.
 
 ## Working conventions
 

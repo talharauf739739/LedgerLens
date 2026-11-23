@@ -6,7 +6,7 @@ LedgerLens is open-source document intelligence for fintech. It turns messy fina
 
 It is built to run fully locally and free (Foundry Local + Floci-az + open-source OCR), and to move to Azure AI Foundry with a config switch.
 
-> **Status:** Phase 0 (foundations). Config, LLM provider abstraction, storage/DB/cache wrappers, health API, migrations and CI are in place; extraction comes next. See [spec.md](spec.md) for the full specification.
+> **Status:** Phase 1. Foundations (config, LLM providers, storage/DB/cache, health API, CI) plus schemas, deterministic finance rules and a synthetic document generator with exact ground truth. Parsing/OCR comes next. See [spec.md](spec.md) for the full specification.
 
 ## Quickstart
 
@@ -20,6 +20,12 @@ uv run alembic upgrade head      # create database tables
 uv run ledgerlens init-storage   # create blob container + jobs queue
 uv run ledgerlens hello          # one prompt through the configured LLM
 curl localhost:8000/readyz       # every backing service should report "ok"
+```
+
+Generate synthetic test documents (clean, scanned-looking and tampered, each with a `.truth.json`):
+
+```bash
+uv run python -m synth --count 20   # -> data/synth/{bank_statement,invoice}/
 ```
 
 Run the checks with `uv run pytest` (unit) and `uv run pytest -m integration` (needs the compose stack).
