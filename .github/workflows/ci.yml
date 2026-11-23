@@ -47,12 +47,17 @@ jobs:
       valkey:
         image: valkey/valkey:8-alpine
         ports: ["6379:6379"]
+      floci:
+        image: floci/floci-az:0.17.0
+        ports: ["4577:4577"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
       - run: uv sync --frozen
+      - name: Wait for Floci
+        run: for i in $(seq 1 30); do curl -fs localhost:4577/health && break; sleep 2; done
       - run: uv run alembic upgrade head
       - run: uv run pytest -m integration
       - run: uv run alembic downgrade base

@@ -10,12 +10,14 @@ name: ledgerlens
 services:
   floci:
     # Azure-compatible Blob, Queue, Table and Key Vault on :4577.
-    # TODO(phase 0): pin to a version once the smoke test passes (spec §15).
-    image: floci/floci-az:latest
+    # Pinned after the phase-0 smoke test (blob/queue via the official SDKs).
+    # Storage is in-memory in this edition: restarting Floci empties blobs and queues.
+    image: floci/floci-az:0.17.0
     ports: ["4577:4577"]
     volumes: [floci-data:/app/data]
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4577/health || curl -fs http://localhost:4577/health"]
+      # The image has no curl, wget or grep: pure bash (/dev/tcp + pattern match).
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/4577 && printf 'GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && read -r status <&3 && [[ $$status == *' 200 '* ]]"]
       interval: 10s
       retries: 10
 
@@ -59,7 +61,7 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       valkey: {condition: service_healthy}
-      floci: {condition: service_started}
+      floci: {condition: service_healthy}
 
 volumes:
   floci-data:

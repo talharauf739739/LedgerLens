@@ -281,6 +281,6 @@ Landscape to know: Azure AI Document Intelligence, AWS Textract, Google Document
 Ask: feedback, design partners (a lender or an AP team), or a role building it.
 15. Open questions
 Is Foundry Local available on the demo VM's OS? If not, use Ollama there (that's the plan).
-Which Floci-az services and SDK versions are verified? Run a smoke test in phase 0.
+~~Which Floci-az services and SDK versions are verified?~~ Verified 2026-11-23: floci-az 0.17.0 with azure-storage-blob/queue async SDKs (blob upload/download, queue send/receive/delete, container/queue create). Storage is in-memory in this edition, so a restart empties it. Key Vault and Table not exercised yet.
 Is a small vision LLM (e.g. Qwen2.5-VL) worth adding for checkboxes and handwriting? Decide after phase 4.
-Pin the floci/floci-az image to a version once the phase-0 smoke test passes (compose starts on :latest).
+~~Pin the floci/floci-az image~~ Pinned to 0.17.0.

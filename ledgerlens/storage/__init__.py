@@ -9,7 +9,7 @@ Only the endpoint and credential change:
 
 from __future__ import annotations
 
-from azure.core.credentials import TokenCredential
+from azure.core.credentials_async import AsyncTokenCredential
 from azure.storage.blob.aio import BlobServiceClient
 from azure.storage.queue import TextBase64DecodePolicy, TextBase64EncodePolicy
 from azure.storage.queue.aio import QueueClient, QueueServiceClient
@@ -17,8 +17,9 @@ from azure.storage.queue.aio import QueueClient, QueueServiceClient
 from ledgerlens.config import Settings
 
 
-def _credential() -> TokenCredential:
-    from azure.identity import DefaultAzureCredential
+def _credential() -> AsyncTokenCredential:
+    # Async clients need the async credential (azure.identity.aio), not the sync one.
+    from azure.identity.aio import DefaultAzureCredential
 
     return DefaultAzureCredential()
 
@@ -33,7 +34,7 @@ def blob_service(settings: Settings) -> BlobServiceClient:
             settings.azure_storage_connection_string.get_secret_value()
         )
     if settings.azure_storage_account_url:
-        return BlobServiceClient(settings.azure_storage_account_url, credential=_credential())  # type: ignore[arg-type]
+        return BlobServiceClient(settings.azure_storage_account_url, credential=_credential())
     raise ValueError("Set AZURE_STORAGE_CONNECTION_STRING (local) or AZURE_STORAGE_ACCOUNT_URL")
 
 
@@ -45,18 +46,33 @@ def queue_service(settings: Settings) -> QueueServiceClient:
     if settings.azure_storage_account_url:
         return QueueServiceClient(
             _queue_account_url(settings.azure_storage_account_url),
-            credential=_credential(),  # type: ignore[arg-type]
+            credential=_credential(),
         )
     raise ValueError("Set AZURE_STORAGE_CONNECTION_STRING (local) or AZURE_STORAGE_ACCOUNT_URL")
 
 
 def jobs_queue(settings: Settings) -> QueueClient:
-    """The extraction-jobs queue. Messages are base64 JSON, matching Azure Functions' default."""
-    return queue_service(settings).get_queue_client(
-        settings.jobs_queue,
-        message_encode_policy=TextBase64EncodePolicy(),
-        message_decode_policy=TextBase64DecodePolicy(),
-    )
+    """The extraction-jobs queue. Messages are base64 JSON, matching Azure Functions' default.
+
+    Built directly (not via a QueueServiceClient) so the returned client owns, and closes,
+    its own HTTP session.
+    """
+    if settings.azure_storage_connection_string:
+        return QueueClient.from_connection_string(
+            settings.azure_storage_connection_string.get_secret_value(),
+            settings.jobs_queue,
+            message_encode_policy=TextBase64EncodePolicy(),
+            message_decode_policy=TextBase64DecodePolicy(),
+        )
+    if settings.azure_storage_account_url:
+        return QueueClient(
+            _queue_account_url(settings.azure_storage_account_url),
+            settings.jobs_queue,
+            credential=_credential(),
+            message_encode_policy=TextBase64EncodePolicy(),
+            message_decode_policy=TextBase64DecodePolicy(),
+        )
+    raise ValueError("Set AZURE_STORAGE_CONNECTION_STRING (local) or AZURE_STORAGE_ACCOUNT_URL")
 
 
 async def ensure_resources(settings: Settings) -> None:
