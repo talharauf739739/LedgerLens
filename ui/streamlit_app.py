@@ -56,7 +56,12 @@ RULE_ICON = {
     RuleStatus.SKIP: "⚪",
 }
 
-st.set_page_config(page_title="LedgerLens review", page_icon="🧾", layout="wide")
+st.set_page_config(
+    page_title="LedgerLens review",
+    page_icon="🧾",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
 # --- inputs ------------------------------------------------------------------------------
@@ -112,9 +117,12 @@ with st.sidebar:
         if not samples:
             st.error("Couldn't generate the synthetic samples.")
         else:
-            choice = st.selectbox("Sample", samples, format_func=sample_label)
+            # Open on a tampered statement so a first visit shows a failing check right away.
+            first = next((i for i, p in enumerate(samples) if "tampered" in p.stem), 0)
+            choice = st.selectbox("Sample", samples, index=first, format_func=sample_label)
             st.caption("Tip: pick a *tampered* statement to see reconciliation fail.")
-            if st.button("Process", type="primary"):
+            clicked = st.button("Process", type="primary")
+            if clicked or "result" not in st.session_state:
                 truth = json.loads(
                     choice.with_suffix("").with_suffix(".truth.json").read_text("utf-8")
                 )
@@ -143,9 +151,9 @@ with st.sidebar:
 if "result" not in st.session_state:
     st.header("Review queue")
     st.write(
-        "Pick a sample in the sidebar and press Process. Every value is shown with its receipt "
-        "(a box on the page); values that couldn't be found, and failed finance checks, "
-        "come here for a human decision."
+        "Pick a sample in the sidebar (open it with the arrow at the top left) and press "
+        "Process. Every value is shown with its receipt (a box on the page); values that "
+        "couldn't be found, and failed finance checks, come here for a human decision."
     )
     st.stop()
 
