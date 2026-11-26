@@ -11,7 +11,6 @@ from ledgerlens.pipeline.process import ProcessResult, process_pdf
 from ledgerlens.schemas import RuleStatus
 from ledgerlens.schemas.base import FieldStatus
 from synth import GENERATORS
-from synth.__main__ import main as synth_main
 from synth.oracle import ReplayLLM, oracle_draft
 from ui.review import (
     apply_correction,
@@ -91,34 +90,43 @@ def test_tampered_statement_is_flagged_and_decision_saved(tmp_path: Path) -> Non
 
 
 def test_streamlit_page_runs_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A fresh deploy: no samples yet, uploads off. The page must generate its own synthetic
+    samples, process a tampered statement, flag it, and save a review decision."""
     from streamlit.testing.v1 import AppTest
 
     app = Path(__file__).resolve().parents[1] / "ui" / "streamlit_app.py"
-    monkeypatch.chdir(tmp_path)  # the page reads data/synth and writes data/reviews here
-    synth_main(
-        [
-            "--count",
-            "1",
-            "--out",
-            "data/synth",
-            "--doc-type",
-            "bank_statement",
-            "--variants",
-            "tampered",
-        ]
-    )
+    monkeypatch.setenv("LEDGERLENS_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("LEDGERLENS_ALLOW_UPLOAD", raising=False)
 
-    at = AppTest.from_file(str(app), default_timeout=120).run()
+    at = AppTest.from_file(str(app), default_timeout=300).run()
     assert not at.exception
-    at.sidebar.button[0].click().run()  # Process the (only) sample
+    assert len(list((tmp_path / "synth").glob("*/*.pdf"))) == 12
+    assert not [r for r in at.sidebar.radio if r.label == "Source"]  # no upload option
+    assert any("synthetic documents only" in i.value for i in at.sidebar.info)
+
+    sample = at.sidebar.selectbox[0]
+    sample.select(
+        next(o for o in sample.options if "bank_statement" in str(o) and "tampered" in str(o))
+    ).run()
+    at.sidebar.button[0].click().run()  # Process
     assert not at.exception
     metrics = {m.label: m.value for m in at.metric}
     assert metrics["Document type"] == "bank statement"
     assert int(metrics["Checks failed"]) >= 1  # the planted amount breaks reconciliation
     assert any("Needs review" in w.value for w in at.warning)
 
-    reviewer = next(t for t in at.text_input if t.label == "Reviewer")
-    reviewer.input("Test Reviewer")
+    next(t for t in at.text_input if t.label == "Reviewer").input("Test Reviewer")
     next(b for b in at.button if b.label == "Approve").click().run()
     assert not at.exception
-    assert list((tmp_path / "data" / "reviews").glob("*.json"))
+    assert list((tmp_path / "reviews").glob("*.json"))
+
+
+def test_uploads_can_be_enabled_locally(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from streamlit.testing.v1 import AppTest
+
+    app = Path(__file__).resolve().parents[1] / "ui" / "streamlit_app.py"
+    monkeypatch.setenv("LEDGERLENS_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LEDGERLENS_ALLOW_UPLOAD", "1")
+    at = AppTest.from_file(str(app), default_timeout=300).run()
+    assert not at.exception
+    assert [r for r in at.sidebar.radio if r.label == "Source"]

@@ -5,21 +5,32 @@
 
 Replay mode runs the real pipeline (parse, classify, ground, rules) on synthetic samples with
 the ground truth standing in for the LLM, so it works offline on a small laptop.
+
+Uploads are off unless LEDGERLENS_ALLOW_UPLOAD=1: the public demo (Streamlit Community Cloud)
+must only ever show synthetic documents, and has no LLM anyway.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
 import streamlit as st
 
-from ledgerlens.pipeline.process import ProcessResult, process_pdf
-from ledgerlens.schemas import RuleStatus
-from synth.oracle import ReplayLLM, draft_from_truth
-from ui.review import (
+# Streamlit Community Cloud runs this file from a plain checkout (the package isn't
+# installed), so make the repo root importable.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from ledgerlens.pipeline.process import ProcessResult, process_pdf  # noqa: E402
+from ledgerlens.schemas import RuleStatus  # noqa: E402
+from synth.oracle import ReplayLLM, draft_from_truth  # noqa: E402
+from ui.review import (  # noqa: E402
     Correction,
     apply_correction,
     field_items,
@@ -33,8 +44,11 @@ from ui.review import (
     save_decision,
 )
 
-SYNTH_DIR = Path("data/synth")
-REVIEWS_DIR = Path("data/reviews")
+DATA_DIR = Path(os.environ.get("LEDGERLENS_DATA_DIR", ROOT / "data"))  # tests point this elsewhere
+SYNTH_DIR = DATA_DIR / "synth"
+REVIEWS_DIR = DATA_DIR / "reviews"
+ALLOW_UPLOAD = os.environ.get("LEDGERLENS_ALLOW_UPLOAD") == "1"
+SAMPLES_PER_TYPE = 2  # x 2 types x 3 variants (clean, scanned, tampered) = 12 documents
 RULE_ICON = {
     RuleStatus.PASS: "✅",
     RuleStatus.FAIL: "❌",
@@ -58,6 +72,16 @@ def sample_label(pdf: Path) -> str:
     return f"{meta['id']} · {meta['template']} · {meta['variant']}"
 
 
+@st.cache_resource(show_spinner="Generating synthetic sample documents (first visit only)...")
+def ensure_samples() -> int:
+    """Create synthetic samples once per server if there are none (fresh cloud deploys)."""
+    if not list_samples():
+        from synth.__main__ import main as synth_main
+
+        synth_main(["--count", str(SAMPLES_PER_TYPE), "--out", str(SYNTH_DIR)])
+    return len(list_samples())
+
+
 def run(pdf_bytes: bytes, llm: Any, doc_type: str | None) -> ProcessResult:
     return asyncio.run(process_pdf(pdf_bytes, doc_type, llm))
 
@@ -71,17 +95,22 @@ def start(key: str, pdf_bytes: bytes, result: ProcessResult) -> None:
 with st.sidebar:
     st.title("🧾 LedgerLens")
     st.caption("Every extracted number has a receipt.")
-    mode = st.radio("Source", ["Synthetic sample (replay, no LLM)", "Upload a PDF (uses your LLM)"])
+    if ALLOW_UPLOAD:
+        mode = st.radio(
+            "Source", ["Synthetic sample (replay, no LLM)", "Upload a PDF (uses your LLM)"]
+        )
+    else:
+        mode = "Synthetic"
+        st.info(
+            "Public demo: synthetic documents only (fake names and numbers, generated on the "
+            "fly). Ground truth stands in for the LLM. Uploads are disabled."
+        )
 
     if mode.startswith("Synthetic"):
+        ensure_samples()
         samples = list_samples()
         if not samples:
-            st.info("No synthetic samples yet.")
-            if st.button("Generate samples"):
-                from synth.__main__ import main as synth_main
-
-                synth_main(["--count", "3", "--out", str(SYNTH_DIR)])
-                st.rerun()
+            st.error("Couldn't generate the synthetic samples.")
         else:
             choice = st.selectbox("Sample", samples, format_func=sample_label)
             st.caption("Tip: pick a *tampered* statement to see reconciliation fail.")
@@ -114,7 +143,7 @@ with st.sidebar:
 if "result" not in st.session_state:
     st.header("Review queue")
     st.write(
-        "Pick a sample or upload a PDF in the sidebar. Every value is shown with its receipt "
+        "Pick a sample in the sidebar and press Process. Every value is shown with its receipt "
         "(a box on the page); values that couldn't be found, and failed finance checks, "
         "come here for a human decision."
     )
@@ -150,9 +179,9 @@ with right:
 
     tab_f, tab_r, tab_c, tab_rev, tab_t = st.tabs(["Fields", "Rows", "Checks", "Review", "Trace"])
     with tab_f:
-        st.dataframe(field_rows(doc), hide_index=True, use_container_width=True)
+        st.dataframe(field_rows(doc), hide_index=True, width="stretch")
     with tab_r:
-        st.dataframe(row_records(doc), hide_index=True, use_container_width=True)
+        st.dataframe(row_records(doc), hide_index=True, width="stretch")
     with tab_c:
         for r in doc.validation:
             line = f"{RULE_ICON[r.status]} **{r.rule}**"
@@ -210,5 +239,5 @@ with left:
     hl = highlights(doc, selected)
     default_page = next((h.page for h in hl if h.selected), 1)
     page = st.number_input("Page", 1, pages, value=default_page) if pages > 1 else 1
-    st.image(image_bytes(render_page(pdf_bytes, int(page), hl)), use_container_width=True)
+    st.image(image_bytes(render_page(pdf_bytes, int(page), hl)), width="stretch")
     st.caption("Green: grounded · Blue: corrected by a reviewer · Purple: selected")

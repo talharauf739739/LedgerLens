@@ -57,7 +57,7 @@ tests/        unit, rules (hypothesis), golden snapshots
 - `uv run ledgerlens hello`: send one prompt through the configured LLM provider
 - `uv run ledgerlens init-storage`: create the blob container and jobs queue
 - `uv run ledgerlens extract <file.pdf> [--doc-type auto|bank_statement|invoice] [-o out.json]`: full workflow on one PDF (needs an LLM provider)
-- `uv sync --extra ui && uv run streamlit run ui/streamlit_app.py`: review UI. Replay mode works offline (synthetic truth stands in for the LLM).
+- `uv sync --extra ui && uv run streamlit run ui/streamlit_app.py`: review UI. Replay mode works offline (synthetic truth stands in for the LLM). Uploads only with `LEDGERLENS_ALLOW_UPLOAD=1`; the public demo (Streamlit Community Cloud, deps in `ui/requirements.txt`) must stay synthetic-only. Keep `ui/requirements.txt` pinned to `uv.lock` when bumping app deps.
 - `uv run python -m synth --count 20`: synthetic PDFs + `.truth.json` into `data/synth/` (clean, noisy, tampered)
 - `docker compose up`: Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI
 - `uv run alembic upgrade head`: apply database migrations

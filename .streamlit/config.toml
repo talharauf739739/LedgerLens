@@ -1,0 +1,10 @@
+# Used locally and by Streamlit Community Cloud.
+[browser]
+gatherUsageStats = false
+
+[server]
+maxUploadSize = 20  # MB, same limit as the API
+
+[theme]
+base = "light"
+primaryColor = "#2563eb"

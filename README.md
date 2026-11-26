@@ -41,7 +41,16 @@ uv sync --extra ui
 uv run streamlit run ui/streamlit_app.py
 ```
 
-Pick a synthetic sample, see every value boxed on the page, and try a *tampered* statement to watch reconciliation fail and the document go to review.
+Pick a synthetic sample, see every value boxed on the page, and try a *tampered* statement to watch reconciliation fail and the document go to review. Uploading your own PDF (which needs an LLM) is off by default; enable it locally with `LEDGERLENS_ALLOW_UPLOAD=1`.
+
+### Deploy the demo on Streamlit Community Cloud (free)
+
+1. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub and choose **Create app**.
+2. Repository: this repo · Branch: `main` · Main file path: `ui/streamlit_app.py`.
+3. **Advanced settings:** Python **3.12**. Don't set `LEDGERLENS_ALLOW_UPLOAD`: the public demo shows synthetic documents only.
+4. Deploy. Dependencies come from `ui/requirements.txt`; the first visit generates 12 synthetic samples (a few seconds).
+
+Vercel can't host Streamlit: its serverless functions don't keep the WebSocket connection Streamlit needs.
 
 No GPU? [notebooks/kaggle_eval.ipynb](notebooks/kaggle_eval.ipynb) runs the extraction eval on a free Kaggle GPU with an open model.
 
