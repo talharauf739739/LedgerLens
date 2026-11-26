@@ -2,7 +2,7 @@
 
 Open-source (MIT) document intelligence for fintech: messy financial PDFs and scans in, grounded and validated JSON out. Every extracted value must point back to its source on the page. Full spec: [spec.md](spec.md).
 
-**Status:** Phase 1 done. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`, `schemas/` and `rules/` (bank_statement, invoice), and `synth/` (generators with exact ground truth). Next is Phase 2 (parse/OCR). The rest of the layout below is the target.
+**Status:** Phase 2 in progress. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`, `schemas/` and `rules/` (bank_statement, invoice), `synth/` (generators with exact ground truth), `normalize.py`, `pipeline/` (text layer + RapidOCR spans, deskew, table Markdown), `agents/` (drafts, versioned prompts, baseline extractor) and `eval/` (parse recall, extraction scoring). Baseline LLM numbers still to be run (on Kaggle). The rest of the layout below is the target.
 
 ## Non-negotiable rules
 
@@ -25,7 +25,7 @@ Open-source (MIT) document intelligence for fintech: messy financial PDFs and sc
 
 ## Stack
 
-Python 3.12 with `uv` · FastAPI + Pydantic v2 · Streamlit · Microsoft Agent Framework · Docling, PaddleOCR/RapidOCR, Tesseract, pypdfium2, pdfplumber, OpenCV · rapidfuzz · PostgreSQL 17 (SQLAlchemy 2 + asyncpg + Alembic) · Valkey 8 (redis-py) · Floci-az (local Azure emulation in Docker) · Nginx · Presidio · OpenTelemetry · pytest + hypothesis · ruff, mypy, pre-commit
+Python 3.12 with `uv` · FastAPI + Pydantic v2 · Streamlit · Microsoft Agent Framework · pdfplumber + pypdfium2 (text layer), RapidOCR on ONNX Runtime (scans) · rapidfuzz · PostgreSQL 17 (SQLAlchemy 2 + asyncpg + Alembic) · Valkey 8 (redis-py) · Floci-az (local Azure emulation in Docker) · Nginx · Presidio · OpenTelemetry · pytest + hypothesis · ruff, mypy, pre-commit
 
 LLM access goes only through `ledgerlens/llm/provider.py` (`LLM_PROVIDER = foundry_local | ollama | azure_foundry`, all OpenAI-compatible). Don't hard-code the Foundry Local port; discover it with `foundry-local-sdk`. Verify model IDs against each catalog, since they change.
 
@@ -53,13 +53,18 @@ tests/        unit, rules (hypothesis), golden snapshots
 
 - `uv sync`: install dependencies
 - `uv run pytest`: unit tests (integration tests are excluded by default; `-m integration` runs them against the compose stack)
-- `uv run ruff check . && uv run ruff format --check . && uv run mypy ledgerlens synth`: lint, format and type-check (mypy is strict). CI runs all of these plus a license gate and gitleaks.
+- `uv run ruff check . && uv run ruff format --check . && uv run mypy ledgerlens synth eval`: lint, format and type-check (mypy is strict). CI runs all of these plus a license gate and gitleaks.
 - `uv run ledgerlens hello`: send one prompt through the configured LLM provider
 - `uv run ledgerlens init-storage`: create the blob container and jobs queue
 - `uv run python -m synth --count 20`: synthetic PDFs + `.truth.json` into `data/synth/` (clean, noisy, tampered)
 - `docker compose up`: Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI
 - `uv run alembic upgrade head`: apply database migrations
-- `uv run python -m eval --dataset <name>`: evaluation report
+- `uv run python -m eval parse`: parser recall vs synthetic truth (no LLM); `python -m eval extract --limit 5`: baseline LLM extraction. Reports go to `reports/`.
+
+## Machine limits (developer laptop)
+
+- The dev laptop has 8 GB RAM, an integrated GPU and a 4-core CPU. Keep the local stack light: no PyTorch, Docling or local 4B+ LLMs installed by default. Ask before adding any heavy dependency.
+- Heavy jobs (LLM extraction evals, Docling comparison) run on free cloud notebooks (Kaggle GPU) using the same code and the Ollama provider. Docker only when needed, then `docker compose stop`.
 
 ## Ground-truth conventions
 

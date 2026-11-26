@@ -6,7 +6,7 @@ LedgerLens is open-source document intelligence for fintech. It turns messy fina
 
 It is built to run fully locally and free (Foundry Local + Floci-az + open-source OCR), and to move to Azure AI Foundry with a config switch.
 
-> **Status:** Phase 1. Foundations (config, LLM providers, storage/DB/cache, health API, CI) plus schemas, deterministic finance rules and a synthetic document generator with exact ground truth. Parsing/OCR comes next. See [spec.md](spec.md) for the full specification.
+> **Status:** Phase 2. Foundations, schemas, finance rules and a synthetic generator with exact ground truth, plus parsing (PDF text layer + RapidOCR with deskew) and a baseline LLM extractor. Parse recall on synthetic data: **99.7%** of printed values found at their true position ([report](reports/eval_2026-11-26_parse.md)). Grounding and the agent workflow come next. See [spec.md](spec.md) for the full specification.
 
 ## Quickstart
 

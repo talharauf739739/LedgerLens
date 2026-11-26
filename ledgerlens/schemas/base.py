@@ -46,6 +46,7 @@ class Source(BaseModel):
 
 
 class FieldStatus(StrEnum):
+    PROPOSED = "proposed"  # extracted by a model, not yet grounded (never final)
     GROUNDED = "grounded"  # value matched an OCR span at `source`
     UNGROUNDED = (
         "ungrounded"  # model proposed a value we couldn't find: value is null, needs review

@@ -283,4 +283,5 @@ Ask: feedback, design partners (a lender or an AP team), or a role building it.
 Is Foundry Local available on the demo VM's OS? If not, use Ollama there (that's the plan).
 ~~Which Floci-az services and SDK versions are verified?~~ Verified 2026-11-23: floci-az 0.17.0 with azure-storage-blob/queue async SDKs (blob upload/download, queue send/receive/delete, container/queue create). Storage is in-memory in this edition, so a restart empties it. Key Vault and Table not exercised yet.
 Is a small vision LLM (e.g. Qwen2.5-VL) worth adding for checkboxes and handwriting? Decide after phase 4.
+Docling (PyTorch) is deferred: the dev laptop has 8 GB RAM. Phase 2 uses pdfplumber + RapidOCR with our own deskew and column-aware Markdown (parse recall 99.7% on synthetic data, reports/eval_2026-11-26_parse.md). Docling stays as an optional comparison run on Kaggle.
 ~~Pin the floci/floci-az image~~ Pinned to 0.17.0.
