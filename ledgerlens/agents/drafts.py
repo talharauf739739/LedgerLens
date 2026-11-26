@@ -92,6 +92,18 @@ DRAFTS: dict[str, type[_Draft]] = {
 # --- draft -> typed document -------------------------------------------------------------
 
 
+# Schema field name -> draft key, where they differ (identifiers are masked in the schema).
+DRAFT_KEY: dict[str, str] = {
+    "account_number_masked": "account_number",
+    "iban_masked": "iban",
+    "seller_iban_masked": "seller_iban",
+}
+
+
+def draft_key(field_name: str) -> str:
+    return DRAFT_KEY.get(field_name, field_name)
+
+
 def _proposed(value: Any) -> dict[str, Any]:
     if value is None:
         return {}

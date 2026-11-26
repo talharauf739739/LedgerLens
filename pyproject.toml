@@ -55,6 +55,7 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "migrations/**" = ["E501"]
 "synth/**" = ["S311"]  # seeded RNG for reproducible fake data, not crypto
+"notebooks/**" = ["E401", "E501", "I001", "S603", "S607"]  # runbooks: shell calls, long comments
 
 [tool.mypy]
 python_version = "3.12"

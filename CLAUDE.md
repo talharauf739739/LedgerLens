@@ -2,7 +2,7 @@
 
 Open-source (MIT) document intelligence for fintech: messy financial PDFs and scans in, grounded and validated JSON out. Every extracted value must point back to its source on the page. Full spec: [spec.md](spec.md).
 
-**Status:** Phase 2 in progress. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`, `schemas/` and `rules/` (bank_statement, invoice), `synth/` (generators with exact ground truth), `normalize.py`, `pipeline/` (text layer + RapidOCR spans, deskew, table Markdown), `agents/` (drafts, versioned prompts, baseline extractor) and `eval/` (parse recall, extraction scoring). Baseline LLM numbers still to be run (on Kaggle). The rest of the layout below is the target.
+**Status:** Phase 2 in progress. Exists: `config.py`, `llm/provider.py`, `storage/`, `db/` (+ `migrations/`), `cache.py`, `api/main.py` (health only), `cli.py`, `schemas/` and `rules/` (bank_statement, invoice), `synth/` (generators with exact ground truth), `normalize.py`, `pipeline/` (text layer + RapidOCR spans, deskew, table Markdown), `agents/` (drafts, versioned prompts, baseline extractor), `pipeline/ground.py` (receipts for every value; unfound values nulled) and `pipeline/process.py` (parse -> extract -> ground -> validate), and `eval/` (parse recall; raw vs grounded extraction, hallucination rate). Real-LLM numbers come from `notebooks/kaggle_eval.ipynb`. Next: agent workflow (Agent Framework) and the review UI. The rest of the layout below is the target.
 
 ## Non-negotiable rules
 
@@ -56,6 +56,7 @@ tests/        unit, rules (hypothesis), golden snapshots
 - `uv run ruff check . && uv run ruff format --check . && uv run mypy ledgerlens synth eval`: lint, format and type-check (mypy is strict). CI runs all of these plus a license gate and gitleaks.
 - `uv run ledgerlens hello`: send one prompt through the configured LLM provider
 - `uv run ledgerlens init-storage`: create the blob container and jobs queue
+- `uv run ledgerlens extract <file.pdf> --doc-type bank_statement|invoice [-o out.json]`: full pipeline on one PDF (needs an LLM provider)
 - `uv run python -m synth --count 20`: synthetic PDFs + `.truth.json` into `data/synth/` (clean, noisy, tampered)
 - `docker compose up`: Floci, PostgreSQL, Valkey, Jaeger, API, worker and UI
 - `uv run alembic upgrade head`: apply database migrations
@@ -64,7 +65,7 @@ tests/        unit, rules (hypothesis), golden snapshots
 ## Machine limits (developer laptop)
 
 - The dev laptop has 8 GB RAM, an integrated GPU and a 4-core CPU. Keep the local stack light: no PyTorch, Docling or local 4B+ LLMs installed by default. Ask before adding any heavy dependency.
-- Heavy jobs (LLM extraction evals, Docling comparison) run on free cloud notebooks (Kaggle GPU) using the same code and the Ollama provider. Docker only when needed, then `docker compose stop`.
+- Heavy jobs (LLM extraction evals, Docling comparison) run on free cloud notebooks (Kaggle GPU) using the same code and the Ollama provider: `notebooks/kaggle_eval.ipynb`. Docker only when needed, then `docker compose stop`.
 
 ## Ground-truth conventions
 

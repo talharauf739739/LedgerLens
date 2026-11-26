@@ -34,15 +34,49 @@ async def _init_storage() -> int:
     return 0
 
 
+async def _extract(data: bytes, doc_type: str) -> str:
+    import json
+
+    from ledgerlens.llm import get_llm_client
+    from ledgerlens.pipeline.process import process_pdf
+
+    result = await process_pdf(data, doc_type, get_llm_client())
+    payload = {
+        **result.document.model_dump_doc(exclude={"markdown"}),
+        "review": {
+            "needs_review": result.needs_review,
+            "ungrounded_fields": result.grounding.ungrounded,
+            "ungrounded_rows": result.grounding.rows_ungrounded,
+            "issues": result.issues,
+        },
+        "provenance": {"model": result.model, "prompt_version": result.prompt_version},
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ledgerlens")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("hello", help="Send one prompt to the configured LLM provider")
     sub.add_parser("init-storage", help="Create the blob container and jobs queue")
+    ex = sub.add_parser("extract", help="Parse, extract, ground and validate one PDF")
+    ex.add_argument("pdf")
+    ex.add_argument("--doc-type", required=True, choices=["bank_statement", "invoice"])
+    ex.add_argument("-o", "--out", help="write JSON here instead of stdout")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
+    if args.command == "extract":
+        from pathlib import Path
+
+        text = asyncio.run(_extract(Path(args.pdf).read_bytes(), args.doc_type))
+        if args.out:
+            Path(args.out).write_text(text, encoding="utf-8")
+            print(f"Written to {args.out}")
+        else:
+            print(text)
+        return 0
     commands = {"hello": _hello, "init-storage": _init_storage}
     return asyncio.run(commands[args.command]())
 

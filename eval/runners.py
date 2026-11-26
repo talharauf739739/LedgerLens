@@ -123,11 +123,16 @@ def parse_report(stats: dict[str, ParseStats]) -> str:
 
 @dataclass
 class ExtractStats:
-    fields: PRF = field(default_factory=PRF)
+    fields_raw: PRF = field(default_factory=PRF)  # straight from the LLM
+    fields: PRF = field(default_factory=PRF)  # after grounding
+    rows_raw: PRF = field(default_factory=PRF)
     rows: PRF = field(default_factory=PRF)
+    proposed: int = 0  # non-null values the LLM proposed
+    hallucinated: int = 0  # ...of which not found on the page (nulled by grounding)
     docs: int = 0
     failed: int = 0
-    rule_fail_docs: int = 0
+    review: int = 0
+    rule_disagree: int = 0
     seconds: list[float] = field(default_factory=list)
     per_field: dict[str, PRF] = field(default_factory=lambda: defaultdict(PRF))
 
@@ -138,8 +143,27 @@ def _row_key(doc_type: str, row: Any) -> tuple[Any, ...]:
     return (row.quantity, row.unit_price, row.amount)
 
 
+def _score_fields(truth: BaseDocument, pred: BaseDocument) -> dict[str, PRF]:
+    out = {}
+    for name in type(truth.fields).model_fields:  # type: ignore[attr-defined]
+        t_val = getattr(truth.fields, name)  # type: ignore[attr-defined]
+        if hasattr(t_val, "value"):
+            out[name] = field_prf(t_val.value, getattr(pred.fields, name).value)  # type: ignore[attr-defined]
+    return out
+
+
+def _score_rows(doc_type: str, truth: BaseDocument, pred: BaseDocument, grounded_only: bool) -> PRF:
+    attr = "transactions" if doc_type == "bank_statement" else "line_items"
+    rows = [r for r in getattr(pred, attr) if not grounded_only or r.source is not None]
+    return multiset_prf(
+        (_row_key(doc_type, r) for r in getattr(truth, attr)),
+        (_row_key(doc_type, r) for r in rows),
+    )
+
+
 async def eval_extract(samples: list[Sample], llm: Any) -> dict[str, ExtractStats]:
     from ledgerlens.agents.extractor import ExtractionError, extract
+    from ledgerlens.pipeline.ground import ground_document
 
     stats: dict[str, ExtractStats] = defaultdict(ExtractStats)
     for sample in samples:
@@ -150,57 +174,67 @@ async def eval_extract(samples: list[Sample], llm: Any) -> dict[str, ExtractStat
         t = time.perf_counter()
         try:
             parsed = parse_pdf(sample.pdf.read_bytes())
-            result = await extract(llm, doc_type, parsed.markdown)
+            extraction = await extract(llm, doc_type, parsed.markdown)
+            grounded, report = ground_document(extraction.document, extraction.draft, parsed)
         except (ExtractionError, ValueError):
             st.failed += 1
             continue
         finally:
             st.seconds.append(time.perf_counter() - t)
-        pred = result.document
-        for name in type(truth.fields).model_fields:  # type: ignore[attr-defined]
-            t_val = getattr(truth.fields, name)  # type: ignore[attr-defined]
-            p_val = getattr(pred.fields, name)  # type: ignore[attr-defined]
-            if not hasattr(t_val, "value"):
-                continue
-            r = field_prf(t_val.value, p_val.value)
-            st.fields.add(r)
-            st.per_field[name].add(r)
-        rows_attr = "transactions" if doc_type == "bank_statement" else "line_items"
-        st.rows.add(
-            multiset_prf(
-                (_row_key(doc_type, r) for r in getattr(truth, rows_attr)),
-                (_row_key(doc_type, r) for r in getattr(pred, rows_attr)),
-            )
-        )
-        arithmetic = {r.rule for r in validate(pred) if r.status is RuleStatus.FAIL} - {
-            "all_values_grounded"
-        }  # grounding comes in phase 3
-        expected = set(sample.meta["expected_failures"])
-        if arithmetic != expected:
-            st.rule_fail_docs += 1
+
+        for prf in _score_fields(truth, extraction.document).values():
+            st.fields_raw.add(prf)
+        for name, prf in _score_fields(truth, grounded).items():
+            st.fields.add(prf)
+            st.per_field[name].add(prf)
+        st.rows_raw.add(_score_rows(doc_type, truth, extraction.document, grounded_only=False))
+        st.rows.add(_score_rows(doc_type, truth, grounded, grounded_only=True))
+
+        st.proposed += len(report.grounded) + len(report.ungrounded)
+        st.hallucinated += len(report.ungrounded)
+
+        results = validate(grounded)
+        failed = {r.rule for r in results if r.status is RuleStatus.FAIL}
+        if failed:
+            st.review += 1
+        if failed - {"all_values_grounded"} != set(sample.meta["expected_failures"]):
+            st.rule_disagree += 1
     return dict(stats)
+
+
+def _prf(p: PRF) -> str:
+    return f"{p.precision:.0%} / {p.recall:.0%} / **{p.f1:.1%}**"
 
 
 def extract_report(stats: dict[str, ExtractStats], model: str) -> str:
     lines = [
-        f"Model: `{model}`",
+        f"Model: `{model}`. P / R / F1 against the synthetic truth.",
         "",
-        "| Set | Docs | Rejected | Field P / R / F1 | Row P / R / F1 | Rules disagree "
-        "| Sec/doc (median) |",
-        "|---|---|---|---|---|---|---|",
+        "| Set | Docs | Rejected | Fields: raw LLM | Fields: grounded | Rows: raw | "
+        "Rows: grounded | Hallucinated (nulled) | Sent to review | Rules wrong | Sec/doc |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for key, st in sorted(stats.items()):
-        f, r = st.fields, st.rows
+        halluc = st.hallucinated / st.proposed if st.proposed else 0.0
         lines.append(
-            f"| {key} | {st.docs} | {st.failed} | "
-            f"{f.precision:.1%} / {f.recall:.1%} / **{f.f1:.1%}** | "
-            f"{r.precision:.1%} / {r.recall:.1%} / **{r.f1:.1%}** | "
-            f"{st.rule_fail_docs} | {statistics.median(st.seconds) if st.seconds else 0:.1f} |"
+            f"| {key} | {st.docs} | {st.failed} | {_prf(st.fields_raw)} | {_prf(st.fields)} | "
+            f"{_prf(st.rows_raw)} | {_prf(st.rows)} | {st.hallucinated}/{st.proposed} "
+            f"({halluc:.1%}) | {st.review}/{st.docs} | {st.rule_disagree} | "
+            f"{statistics.median(st.seconds) if st.seconds else 0:.1f} |"
         )
-    worst: dict[str, PRF] = defaultdict(PRF)
+    totals: dict[str, PRF] = defaultdict(PRF)
     for st in stats.values():
         for name, prf in st.per_field.items():
-            worst[name].add(prf)
-    lines += ["", "Per-field F1 (all sets):", "", "| Field | F1 |", "|---|---|"]
-    lines += [f"| {n} | {p.f1:.1%} |" for n, p in sorted(worst.items(), key=lambda kv: kv[1].f1)]
+            totals[name].add(prf)
+    lines += [
+        "",
+        '"Rules wrong" counts documents whose failed finance rules differ from the truth '
+        "(clean: none; tampered: exactly the planted ones).",
+        "",
+        "Per-field F1 after grounding (all sets):",
+        "",
+        "| Field | F1 |",
+        "|---|---|",
+    ]
+    lines += [f"| {n} | {p.f1:.1%} |" for n, p in sorted(totals.items(), key=lambda kv: kv[1].f1)]
     return "\n".join(lines)

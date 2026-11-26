@@ -69,7 +69,7 @@ def _wrap_document(markdown: str) -> str:
 
 
 async def extract(
-    llm: LLMClient, doc_type: str, markdown: str, *, max_tokens: int = 4096
+    llm: LLMClient, doc_type: str, markdown: str, *, max_tokens: int = 8192
 ) -> Extraction:
     draft_model = DRAFTS[doc_type]
     messages: list[dict[str, Any]] = [

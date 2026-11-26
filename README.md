@@ -6,7 +6,7 @@ LedgerLens is open-source document intelligence for fintech. It turns messy fina
 
 It is built to run fully locally and free (Foundry Local + Floci-az + open-source OCR), and to move to Azure AI Foundry with a config switch.
 
-> **Status:** Phase 2. Foundations, schemas, finance rules and a synthetic generator with exact ground truth, plus parsing (PDF text layer + RapidOCR with deskew) and a baseline LLM extractor. Parse recall on synthetic data: **99.7%** of printed values found at their true position ([report](reports/eval_2026-11-26_parse.md)). Grounding and the agent workflow come next. See [spec.md](spec.md) for the full specification.
+> **Status:** Phase 2. Foundations, schemas, finance rules and a synthetic generator with exact ground truth, plus parsing (PDF text layer + RapidOCR with deskew) and a baseline LLM extractor. Parse recall on synthetic data: **99.7%** of printed values found at their true position ([report](reports/eval_2026-11-26_parse.md)). Grounding is in: every value the model proposes must be found on the page, or it's removed and sent to review (849/849 fields and 2,287/2,287 rows grounded at their true position on 80 unseen synthetic documents). The agent workflow and review UI come next. See [spec.md](spec.md) for the full specification.
 
 ## Quickstart
 
@@ -27,6 +27,14 @@ Generate synthetic test documents (clean, scanned-looking and tampered, each wit
 ```bash
 uv run python -m synth --count 20   # -> data/synth/{bank_statement,invoice}/
 ```
+
+Run the full pipeline on one PDF (needs an LLM: Foundry Local, Ollama or Azure AI Foundry):
+
+```bash
+uv run ledgerlens extract statement.pdf --doc-type bank_statement -o result.json
+```
+
+No GPU? [notebooks/kaggle_eval.ipynb](notebooks/kaggle_eval.ipynb) runs the extraction eval on a free Kaggle GPU with an open model.
 
 Run the checks with `uv run pytest` (unit) and `uv run pytest -m integration` (needs the compose stack).
 

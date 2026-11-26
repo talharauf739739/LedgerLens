@@ -9,42 +9,7 @@ from ledgerlens.agents.drafts import DRAFTS, to_document
 from ledgerlens.agents.extractor import ExtractionError, extract, load_prompt, parse_json_object
 from ledgerlens.schemas.base import FieldStatus
 from synth import GENERATORS
-from synth.common import Generated
-
-# draft key -> schema field name, where they differ
-DRAFT_KEYS = {
-    "account_number_masked": "account_number",
-    "iban_masked": "iban",
-    "seller_iban_masked": "seller_iban",
-}
-
-
-def perfect_draft(gen: Generated) -> dict[str, Any]:
-    """What an ideal extractor returns: header values verbatim as printed; rows as plain text."""
-    draft: dict[str, Any] = {DRAFT_KEYS.get(k, k): v for k, v in gen.meta.printed.items()}
-    doc = gen.document
-    if gen.meta.doc_type == "bank_statement":
-        draft["transactions"] = [
-            {
-                "date": t.date.isoformat(),
-                "description": t.description,
-                "amount": ("-" if t.direction == "debit" else "") + str(t.amount),
-                "direction": t.direction,
-                "balance": str(t.balance),
-            }
-            for t in doc.transactions
-        ]
-    else:
-        draft["line_items"] = [
-            {
-                "description": li.description,
-                "quantity": str(li.quantity),
-                "unit_price": str(li.unit_price),
-                "amount": str(li.amount),
-            }
-            for li in doc.line_items
-        ]
-    return draft
+from tests.helpers import perfect_draft
 
 
 class FakeLLM:
