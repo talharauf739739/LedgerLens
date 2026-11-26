@@ -35,7 +35,12 @@ def _fields(doc: BaseDocument) -> dict[str, Field[object]]:
 def all_values_grounded(doc: BaseDocument) -> RuleResult:
     """Every non-null value must carry a source span (the 'receipt')."""
     rule = "all_values_grounded"
-    bad = [n for n, f in _fields(doc).items() if f.value is not None and f.source is None]
+    # A reviewer's correction is its own receipt (the human sign-off, in the audit log).
+    bad = [
+        n
+        for n, f in _fields(doc).items()
+        if f.value is not None and f.source is None and f.status is not FieldStatus.CORRECTED
+    ]
     rows_attr: list[Any] = next(
         (getattr(doc, a) for a in ("transactions", "line_items") if hasattr(doc, a)), []
     )

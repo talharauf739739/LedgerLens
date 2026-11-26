@@ -34,7 +34,7 @@ async def _init_storage() -> int:
     return 0
 
 
-async def _extract(data: bytes, doc_type: str) -> str:
+async def _extract(data: bytes, doc_type: str | None) -> str:
     import json
 
     from ledgerlens.llm import get_llm_client
@@ -49,7 +49,17 @@ async def _extract(data: bytes, doc_type: str) -> str:
             "ungrounded_rows": result.grounding.rows_ungrounded,
             "issues": result.issues,
         },
-        "provenance": {"model": result.model, "prompt_version": result.prompt_version},
+        "classification": {
+            "doc_type": result.classification.doc_type,
+            "method": result.classification.method,
+            "confidence": result.classification.confidence,
+        },
+        "provenance": {
+            "model": result.model,
+            "prompt_version": result.prompt_version,
+            "attempts": result.attempts,
+            "trace": result.trace,
+        },
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
@@ -62,7 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("init-storage", help="Create the blob container and jobs queue")
     ex = sub.add_parser("extract", help="Parse, extract, ground and validate one PDF")
     ex.add_argument("pdf")
-    ex.add_argument("--doc-type", required=True, choices=["bank_statement", "invoice"])
+    ex.add_argument(
+        "--doc-type",
+        choices=["auto", "bank_statement", "invoice"],
+        default="auto",
+        help="default: let the classifier decide",
+    )
     ex.add_argument("-o", "--out", help="write JSON here instead of stdout")
     args = parser.parse_args(argv)
 
@@ -70,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "extract":
         from pathlib import Path
 
-        text = asyncio.run(_extract(Path(args.pdf).read_bytes(), args.doc_type))
+        doc_type = None if args.doc_type == "auto" else args.doc_type
+        text = asyncio.run(_extract(Path(args.pdf).read_bytes(), doc_type))
         if args.out:
             Path(args.out).write_text(text, encoding="utf-8")
             print(f"Written to {args.out}")

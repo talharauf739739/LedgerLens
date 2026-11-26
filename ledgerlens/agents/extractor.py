@@ -68,14 +68,42 @@ def _wrap_document(markdown: str) -> str:
     return f"<document>\n{markdown}\n</document>"
 
 
+@dataclass(frozen=True)
+class Feedback:
+    """What grounding couldn't find in a previous attempt."""
+
+    previous_draft: dict[str, Any]
+    not_found: list[str]  # draft keys whose values aren't printed anywhere
+
+
+def _feedback_message(fb: Feedback) -> str:
+    keys = ", ".join(fb.not_found)
+    return (
+        f"These values from your answer were not found anywhere in the document: {keys}. "
+        "Re-read the document. For each of them, copy the value exactly as printed, or use "
+        "null if it is not printed. Do not change the other values. Return the complete "
+        "JSON object again."
+    )
+
+
 async def extract(
-    llm: LLMClient, doc_type: str, markdown: str, *, max_tokens: int = 8192
+    llm: LLMClient,
+    doc_type: str,
+    markdown: str,
+    *,
+    feedback: Feedback | None = None,
+    max_tokens: int = 8192,
 ) -> Extraction:
     draft_model = DRAFTS[doc_type]
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": load_prompt(doc_type)},
         {"role": "user", "content": _wrap_document(markdown)},
     ]
+    if feedback is not None:
+        messages += [
+            {"role": "assistant", "content": json.dumps(feedback.previous_draft, default=str)},
+            {"role": "user", "content": _feedback_message(feedback)},
+        ]
     last_error = ""
     for attempt in range(2):
         reply = await llm.chat(messages, temperature=0, max_tokens=max_tokens)

@@ -25,7 +25,7 @@ class OracleLLM:
         self.lie = lie
 
     async def chat(self, messages: list[dict[str, Any]], **_: Any) -> str:
-        text = messages[-1]["content"]
+        text = " ".join(m["content"] for m in messages if m["role"] == "user")
         draft = next(d for marker, d in self.drafts.items() if marker in text)
         draft = dict(draft)
         if self.lie:  # invent one value that isn't printed anywhere

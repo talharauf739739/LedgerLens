@@ -1,0 +1,124 @@
+"""Review UI: the logic module directly, and the Streamlit page headlessly."""
+
+import asyncio
+import json
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from ledgerlens.pipeline.process import ProcessResult, process_pdf
+from ledgerlens.schemas import RuleStatus
+from ledgerlens.schemas.base import FieldStatus
+from synth import GENERATORS
+from synth.__main__ import main as synth_main
+from synth.oracle import ReplayLLM, oracle_draft
+from ui.review import (
+    apply_correction,
+    field_rows,
+    highlights,
+    make_decision,
+    needs_attention,
+    render_page,
+    row_records,
+    save_decision,
+)
+
+
+def _process(
+    doc_type: str, seed: int, *, tamper: bool = False, lie: dict | None = None
+) -> ProcessResult:
+    gen = GENERATORS[doc_type](seed, "t", tamper=tamper)
+    draft = {**oracle_draft(gen), **(lie or {})}
+    return asyncio.run(process_pdf(gen.pdf, None, ReplayLLM(draft)))
+
+
+def test_tables_and_highlights_cover_every_receipt() -> None:
+    r = _process("invoice", 2)
+    rows = field_rows(r.document)
+    assert rows and all(row["status"] == "grounded" for row in rows)
+    assert len(row_records(r.document)) == len(r.document.line_items)
+    hs = highlights(r.document, selected="total")
+    assert sum(h.selected for h in hs) == 1
+    assert len(hs) == len(rows) + len(r.document.line_items)
+
+
+def test_render_page_draws_boxes() -> None:
+    gen = GENERATORS["invoice"](2, "t")
+    r = _process("invoice", 2)
+    plain = render_page(gen.pdf, 1, [])
+    boxed = render_page(gen.pdf, 1, highlights(r.document, "total"))
+    assert plain.size == boxed.size and plain.tobytes() != boxed.tobytes()
+
+
+def test_invented_value_needs_attention_and_can_be_corrected() -> None:
+    r = _process("invoice", 2, lie={"total": "999,999.99"})
+    assert "total" in needs_attention(r.document)
+    assert r.document.fields.total.status is FieldStatus.UNGROUNDED
+
+    bad, err = apply_correction(r.document, "total", "lots")
+    assert err and bad is r.document  # unreadable input changes nothing
+
+    true_total = GENERATORS["invoice"](2, "t").document.fields.total.value
+    fixed, err = apply_correction(r.document, "total", f"{true_total:,}")
+    assert err is None
+    assert fixed.fields.total.value == true_total
+    assert fixed.fields.total.status is FieldStatus.CORRECTED
+    rules = {x.rule: x.status for x in fixed.validation}
+    assert rules["all_values_grounded"] is RuleStatus.PASS
+    assert rules["total_arithmetic"] is RuleStatus.PASS
+    assert needs_attention(fixed) == []
+
+
+def test_correction_types_follow_the_schema() -> None:
+    r = _process("bank_statement", 3)
+    doc, err = apply_correction(r.document, "period_start", "2026-01-31")
+    assert err is None and str(doc.fields.period_start.value) == "2026-01-31"
+    doc, err = apply_correction(doc, "opening_balance", "(1.234,50)")
+    assert err is None and doc.fields.opening_balance.value == Decimal("-1234.50")
+
+
+def test_tampered_statement_is_flagged_and_decision_saved(tmp_path: Path) -> None:
+    r = _process("bank_statement", 5, tamper=True)
+    attention = needs_attention(r.document)
+    assert {"opening_balance", "closing_balance"} <= set(attention)  # named by roll-forward
+    d = make_decision(r.document, r.parsed.sha256, "rejected", " Ana ", "amount altered", [])
+    assert d.reviewer == "Ana" and "balance_roll_forward" in d.failed_rules
+    path = save_decision(d, r.document, tmp_path)
+    saved = json.loads(path.read_text("utf-8"))
+    assert saved["decision"]["decision"] == "rejected"
+    assert saved["document"]["doc_type"] == "bank_statement"
+
+
+def test_streamlit_page_runs_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from streamlit.testing.v1 import AppTest
+
+    app = Path(__file__).resolve().parents[1] / "ui" / "streamlit_app.py"
+    monkeypatch.chdir(tmp_path)  # the page reads data/synth and writes data/reviews here
+    synth_main(
+        [
+            "--count",
+            "1",
+            "--out",
+            "data/synth",
+            "--doc-type",
+            "bank_statement",
+            "--variants",
+            "tampered",
+        ]
+    )
+
+    at = AppTest.from_file(str(app), default_timeout=120).run()
+    assert not at.exception
+    at.sidebar.button[0].click().run()  # Process the (only) sample
+    assert not at.exception
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["Document type"] == "bank statement"
+    assert int(metrics["Checks failed"]) >= 1  # the planted amount breaks reconciliation
+    assert any("Needs review" in w.value for w in at.warning)
+
+    reviewer = next(t for t in at.text_input if t.label == "Reviewer")
+    reviewer.input("Test Reviewer")
+    next(b for b in at.button if b.label == "Approve").click().run()
+    assert not at.exception
+    assert list((tmp_path / "data" / "reviews").glob("*.json"))

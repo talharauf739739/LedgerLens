@@ -1,20 +1,17 @@
-"""The whole pipeline for one document: parse -> extract -> ground -> validate.
-
-Agents propose (extract); code decides (ground + rules). The returned document carries
-receipts for every value it keeps and the rule results that judged it.
+"""Process one document end to end. Thin wrapper over the agent workflow
+(`ledgerlens.agents.workflow`): parse -> classify -> extract -> ground -> validate.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
-from ledgerlens.agents.extractor import extract
-from ledgerlens.llm import LLMClient
-from ledgerlens.pipeline.ground import GroundingReport, ground_document
-from ledgerlens.pipeline.parse import parse_pdf
+from ledgerlens.agents.classifier import Classification
+from ledgerlens.agents.extractor import PROMPT_VERSION
+from ledgerlens.pipeline.ground import GroundingReport
 from ledgerlens.pipeline.spans import ParsedDocument
-from ledgerlens.rules import validate
-from ledgerlens.schemas import BaseDocument, RuleStatus
+from ledgerlens.schemas import BaseDocument
 
 
 @dataclass
@@ -22,32 +19,29 @@ class ProcessResult:
     document: BaseDocument
     parsed: ParsedDocument
     grounding: GroundingReport
+    classification: Classification
+    needs_review: bool
+    attempts: int = 1
     issues: list[str] = field(default_factory=list)
     model: str = ""
-    prompt_version: str = ""
-
-    @property
-    def needs_review(self) -> bool:
-        """Anything ungrounded or any failed rule sends the document to a human."""
-        return bool(
-            self.grounding.ungrounded
-            or self.grounding.rows_ungrounded
-            or any(r.status is RuleStatus.FAIL for r in self.document.validation)
-        )
+    prompt_version: str = PROMPT_VERSION
+    trace: list[dict[str, Any]] = field(default_factory=list)
 
 
-async def process_pdf(data: bytes, doc_type: str, llm: LLMClient) -> ProcessResult:
-    parsed = parse_pdf(data)
-    extraction = await extract(llm, doc_type, parsed.markdown)
-    grounded, report = ground_document(extraction.document, extraction.draft, parsed)
-    final = grounded.model_copy(
-        update={"validation": validate(grounded), "markdown": parsed.markdown}
-    )
+async def process_pdf(data: bytes, doc_type: str | None, llm: Any) -> ProcessResult:
+    """`doc_type=None` lets the classifier decide."""
+    from ledgerlens.agents.workflow import run_workflow
+
+    job = await run_workflow(data, llm, doc_type)
+    assert job.document and job.parsed and job.grounding and job.classification
     return ProcessResult(
-        document=final,
-        parsed=parsed,
-        grounding=report,
-        issues=extraction.issues,
-        model=extraction.model,
-        prompt_version=extraction.prompt_version,
+        document=job.document,
+        parsed=job.parsed,
+        grounding=job.grounding,
+        classification=job.classification,
+        needs_review=job.needs_review,
+        attempts=job.attempts,
+        issues=job.issues,
+        model=job.model,
+        trace=job.trace,
     )

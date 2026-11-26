@@ -18,10 +18,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
-      - run: uv sync --frozen
+      - run: uv sync --frozen --all-extras
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy ledgerlens synth eval
+      - run: uv run mypy ledgerlens synth eval ui
       - run: uv run pytest
       - name: License check (fail on GPL/AGPL/SSPL)
         run: |
