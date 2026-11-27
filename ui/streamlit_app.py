@@ -56,7 +56,20 @@ from ui.review import (  # noqa: E402
 DATA_DIR = Path(os.environ.get("LEDGERLENS_DATA_DIR", ROOT / "data"))  # tests point this elsewhere
 SYNTH_DIR = DATA_DIR / "synth"
 REVIEWS_DIR = DATA_DIR / "reviews"
-ALLOW_UPLOAD = os.environ.get("LEDGERLENS_ALLOW_UPLOAD") == "1"
+
+
+def _upload_flag() -> bool:
+    """LEDGERLENS_ALLOW_UPLOAD from the environment or Streamlit secrets (1/true/yes/on)."""
+    raw: Any = os.environ.get("LEDGERLENS_ALLOW_UPLOAD")
+    if raw is None:
+        try:
+            raw = st.secrets.get("LEDGERLENS_ALLOW_UPLOAD")
+        except Exception:  # no secrets file (local runs)
+            raw = None
+    return str(raw).strip().lower() in {"1", "true", "yes", "on"}
+
+
+ALLOW_UPLOAD = _upload_flag()
 SAMPLES_PER_TYPE = 2  # x 2 types x 3 variants (clean, scanned, tampered) = 12 documents
 READ_ONLY = "Read with OCR (no LLM)"
 FULL = "Full extraction (needs an LLM)"
@@ -163,6 +176,13 @@ with st.sidebar:
             "Public demo: synthetic documents only (fake names and numbers, generated on the "
             "fly). Ground truth stands in for the LLM. Uploads are disabled."
         )
+        with st.expander("Turn on uploads (PDF or image)"):
+            st.markdown(
+                "Only on a **private** app or your own machine.\n\n"
+                "- **Streamlit Cloud:** Manage app → ⋮ → Settings → **Secrets**, add\n"
+                '  `LEDGERLENS_ALLOW_UPLOAD = "1"`, save, then reboot the app.\n'
+                "- **Locally:** set `LEDGERLENS_ALLOW_UPLOAD=1` before `streamlit run`."
+            )
 
     if mode.startswith("Synthetic"):
         ensure_samples()
