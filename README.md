@@ -2,11 +2,15 @@
 
 > **Every extracted number has a receipt.**
 
+[![LedgerLens architecture: entry points, the six-step agent workflow, the LLM provider layer, data services and deployment targets, each marked built, partly built or planned](docs/architecture.svg)](docs/ARCHITECTURE.md)
+
+<sub>Click the diagram for the full architecture with detailed diagrams.</sub>
+
 LedgerLens is open-source document intelligence for fintech. It turns messy financial documents (bank statements, invoices, receipts, pay slips, W-2s) into validated JSON. Every value is tied to where it appears on the page and is checked by deterministic finance rules. A value that can't be grounded is flagged for review, never guessed.
 
 It is built to run fully locally and free (Foundry Local + Floci-az + open-source OCR), and to move to Azure AI Foundry with a config switch.
 
-> **Status:** Phase 2. Foundations, schemas, finance rules and a synthetic generator with exact ground truth, plus parsing (PDF text layer + RapidOCR with deskew) and a baseline LLM extractor. Parse recall on synthetic data: **99.7%** of printed values found at their true position ([report](reports/eval_2026-11-26_parse.md)). Grounding is in: every value the model proposes must be found on the page, or it's removed and sent to review (849/849 fields and 2,287/2,287 rows grounded at their true position on 80 unseen synthetic documents). The agent workflow (Microsoft Agent Framework: parse -> classify -> extract -> ground -> validate, with one grounding-driven retry) and a Streamlit review screen are in. See [spec.md](spec.md) for the full specification.
+> **Status:** Phase 2. Foundations, schemas, finance rules and a synthetic generator with exact ground truth, plus parsing (PDF text layer + RapidOCR with deskew) and a baseline LLM extractor. Parse recall on synthetic data: **99.7%** of printed values found at their true position ([report](reports/eval_2026-11-26_parse.md)). Grounding is in: every value the model proposes must be found on the page, or it's removed and sent to review (849/849 fields and 2,287/2,287 rows grounded at their true position on 80 unseen synthetic documents). The agent workflow (Microsoft Agent Framework: parse -> classify -> extract -> ground -> validate, with one grounding-driven retry) and a Streamlit review screen are in. Architecture, with what is built and what is planned: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Full specification: [spec.md](spec.md).
 
 ## Quickstart
 

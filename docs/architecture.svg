@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" font-family="Segoe UI, Helvetica Neue, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
+<title id="t">LedgerLens architecture</title>
+<desc id="d">Entry points (Review UI, CLI, API) feed a six-step agent workflow (ingest, parse, classify, extract, ground, validate) that calls a pluggable LLM provider layer and produces typed JSON in which every value has a page and bounding box. Data lives in PostgreSQL, Valkey and Azure Blob, Queue and Key Vault.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/></marker></defs>
+<rect width="1280" height="900" rx="16" fill="#FFFFFF"/>
+<text x="40" y="52" font-size="28" font-weight="700" fill="#0F172A" text-anchor="start">LedgerLens architecture</text>
+<text x="40" y="80" font-size="14" font-weight="normal" fill="#475569" text-anchor="start">Financial documents in, validated JSON out. Every extracted number has a receipt: the page and box it was printed in.</text>
+<rect x="860" y="34" width="22" height="16" rx="4" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="890" y="47" font-size="12.5" font-weight="normal" fill="#334155" text-anchor="start">Built</text>
+<rect x="995" y="34" width="22" height="16" rx="4" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="1025" y="47" font-size="12.5" font-weight="normal" fill="#334155" text-anchor="start">Partly built</text>
+<rect x="1130" y="34" width="22" height="16" rx="4" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1160" y="47" font-size="12.5" font-weight="normal" fill="#334155" text-anchor="start">Planned</text>
+<rect x="40" y="110" width="250" height="610" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+<text x="56" y="136" font-size="13" font-weight="700" fill="#1E293B" text-anchor="start">Entry points</text>
+<rect x="58" y="156" width="214" height="62" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="72" y="179" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">Review UI</text>
+<text x="72" y="197" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">Streamlit: receipts on the page,</text>
+<text x="72" y="212" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">corrections, approve / reject</text>
+<rect x="58" y="232" width="214" height="52" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="72" y="255" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">CLI</text>
+<text x="72" y="273" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">ledgerlens read | extract</text>
+<rect x="58" y="306" width="214" height="52" rx="10" fill="#FFFFFF" stroke="#64748B" stroke-width="1.6"/>
+<text x="72" y="329" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">API clients</text>
+<text x="72" y="347" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">developers, other systems</text>
+<rect x="58" y="380" width="214" height="44" rx="10" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="72" y="403" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">Nginx</text>
+<text x="124" y="407" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">TLS, 20 MB limit</text>
+<rect x="58" y="446" width="214" height="66" rx="10" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="72" y="469" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">FastAPI</text>
+<text x="72" y="487" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">health checks built,</text>
+<text x="72" y="502" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">/v1 documents + jobs planned</text>
+<rect x="58" y="600" width="214" height="66" rx="10" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="72" y="623" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">Queue worker</text>
+<text x="72" y="641" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">async jobs, scales on</text>
+<text x="72" y="656" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">queue length</text>
+<path d="M 165 358 L 165 378" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M 165 424 L 165 444" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M 165 512 L 165 598" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<text x="174" y="559" font-size="11" font-weight="normal" fill="#334155" text-anchor="start" font-style="italic">via Azure Queue</text>
+<rect x="320" y="110" width="630" height="300" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+<text x="338" y="136" font-size="13" font-weight="700" fill="#1E293B" text-anchor="start">Agent workflow</text>
+<text x="338" y="152" font-size="11" font-weight="normal" fill="#64748B" text-anchor="start">Microsoft Agent Framework: a fixed graph, every step traced</text>
+<rect x="338" y="172" width="90" height="96" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="383.0" y="196" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">1 Ingest</text>
+<text x="383.0" y="216" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">images to</text>
+<text x="383.0" y="231" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">PDF pages</text>
+<path d="M 428 220 L 439 220" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="440" y="172" width="90" height="96" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="485.0" y="196" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">2 Parse</text>
+<text x="485.0" y="216" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">text layer or</text>
+<text x="485.0" y="231" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">RapidOCR,</text>
+<text x="485.0" y="246" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">deskew, tables</text>
+<path d="M 530 220 L 541 220" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="542" y="172" width="90" height="96" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="587.0" y="196" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">3 Classify</text>
+<text x="587.0" y="216" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">keyword cues;</text>
+<text x="587.0" y="231" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">LLM only if</text>
+<text x="587.0" y="246" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">unsure</text>
+<path d="M 632 220 L 643 220" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="644" y="172" width="90" height="96" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="689.0" y="196" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">4 Extract</text>
+<text x="689.0" y="216" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">LLM copies</text>
+<text x="689.0" y="231" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">printed values</text>
+<text x="689.0" y="246" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">(no maths)</text>
+<path d="M 734 220 L 745 220" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="746" y="172" width="90" height="96" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="791.0" y="196" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">5 Ground</text>
+<text x="791.0" y="216" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">find every</text>
+<text x="791.0" y="231" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">value on the</text>
+<text x="791.0" y="246" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">page</text>
+<path d="M 836 220 L 847 220" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="848" y="172" width="90" height="96" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="893.0" y="196" font-size="13" font-weight="700" fill="#0F172A" text-anchor="middle">6 Validate</text>
+<text x="893.0" y="216" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">13 finance</text>
+<text x="893.0" y="231" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">rules in</text>
+<text x="893.0" y="246" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">Python</text>
+<path d="M 791.0 268 L 791.0 294 L 689.0 294 L 689.0 270" fill="none" stroke="#D97706" stroke-width="1.8" marker-end="url(#arrow)"/>
+<text x="740.0" y="312" font-size="11" font-weight="normal" fill="#B45309" text-anchor="middle" font-style="italic">value not found: retry once</text>
+<text x="338" y="352" font-size="12" font-weight="normal" fill="#1E293B" text-anchor="start">Agents propose, code decides: the LLM never does arithmetic or approves anything.</text>
+<text x="338" y="372" font-size="12" font-weight="normal" fill="#1E293B" text-anchor="start">No receipt, no value: anything not found on the page is set to null and sent to review.</text>
+<text x="338" y="392" font-size="12" font-weight="normal" fill="#1E293B" text-anchor="start">Document text is untrusted: instructions inside documents are ignored.</text>
+<path d="M 272 187 L 318 187" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<path d="M 272 258 L 318 258" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="320" y="440" width="630" height="100" rx="14" fill="#EFF6FF" stroke="#2563EB" stroke-width="1.6"/>
+<text x="338" y="466" font-size="14" font-weight="700" fill="#0F172A" text-anchor="start">Result: typed JSON with receipts</text>
+<text x="338" y="488" font-size="11.5" font-weight="normal" fill="#334155" text-anchor="start">every value: value, page, bounding box, status (grounded / ungrounded / corrected)</text>
+<text x="338" y="506" font-size="11.5" font-weight="normal" fill="#334155" text-anchor="start">rule results (pass / fail per check), step trace, needs-review flag</text>
+<text x="338" y="524" font-size="11.5" font-weight="normal" fill="#334155" text-anchor="start">back to the Review UI: a person corrects, approves or rejects</text>
+<path d="M 893.0 268 L 893.0 438" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="980" y="110" width="260" height="430" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+<text x="996" y="136" font-size="13" font-weight="700" fill="#1E293B" text-anchor="start">LLM provider layer</text>
+<text x="996" y="152" font-size="11" font-weight="normal" fill="#64748B" text-anchor="start">one interface, OpenAI-compatible</text>
+<rect x="996" y="168" width="228" height="50" rx="10" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1010" y="191" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">PII masking</text>
+<text x="1010" y="209" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">Presidio, before any cloud call</text>
+<rect x="996" y="236" width="228" height="50" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="1010" y="259" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">Foundry Local</text>
+<text x="1010" y="277" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">laptop, port auto-discovered</text>
+<rect x="996" y="298" width="228" height="50" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="1010" y="321" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">Ollama</text>
+<text x="1010" y="339" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">Linux VM, Kaggle GPU</text>
+<rect x="996" y="360" width="228" height="50" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="1010" y="383" font-size="14" font-weight="600" fill="#0F172A" text-anchor="start">Azure AI Foundry</text>
+<text x="1010" y="401" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">cloud, managed identity</text>
+<text x="996" y="438" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">Switch with one setting:</text>
+<text x="996" y="456" font-size="12" font-weight="700" fill="#1E293B" text-anchor="start">LLM_PROVIDER</text>
+<text x="996" y="484" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">Prompts are versioned files;</text>
+<text x="996" y="500" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">every result names its model</text>
+<text x="996" y="516" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">and prompt version.</text>
+<path d="M 950 220 L 978 220" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<text x="964" y="210" font-size="10.5" font-weight="normal" fill="#64748B" text-anchor="middle">LLM</text>
+<rect x="320" y="570" width="920" height="150" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+<text x="338" y="596" font-size="13" font-weight="700" fill="#1E293B" text-anchor="start">Data and platform</text>
+<text x="338" y="612" font-size="11" font-weight="normal" fill="#64748B" text-anchor="start">same Azure SDKs locally (Floci-az emulator) and in the cloud</text>
+<rect x="338" y="626" width="138" height="76" rx="10" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="352" y="649" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start">PostgreSQL 17</text>
+<text x="352" y="667" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">jobs, results,</text>
+<text x="352" y="682" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">audit log</text>
+<rect x="489" y="626" width="138" height="76" rx="10" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="503" y="649" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start">Valkey 8</text>
+<text x="503" y="667" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">cache only,</text>
+<text x="503" y="682" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">rate limits</text>
+<rect x="640" y="626" width="138" height="76" rx="10" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="654" y="649" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start">Azure Blob</text>
+<text x="654" y="667" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">uploads,</text>
+<text x="654" y="682" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">page images</text>
+<rect x="791" y="626" width="138" height="76" rx="10" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="805" y="649" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start">Azure Queue</text>
+<text x="805" y="667" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">extraction</text>
+<text x="805" y="682" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">jobs</text>
+<rect x="942" y="626" width="138" height="76" rx="10" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="956" y="649" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start">Key Vault</text>
+<text x="956" y="667" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">secrets,</text>
+<text x="956" y="682" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">managed identity</text>
+<rect x="1093" y="626" width="138" height="76" rx="10" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="1107" y="649" font-size="13.5" font-weight="600" fill="#0F172A" text-anchor="start">Floci-az</text>
+<text x="1107" y="667" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">local Azure</text>
+<text x="1107" y="682" font-size="11.5" font-weight="normal" fill="#475569" text-anchor="start">emulator</text>
+<path d="M 272 640 L 318 640" fill="none" stroke="#475569" stroke-width="1.8" marker-end="url(#arrow)"/>
+<rect x="40" y="744" width="1200" height="96" rx="14" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6"/>
+<text x="56" y="770" font-size="13" font-weight="700" fill="#1E293B" text-anchor="start">Runs on</text>
+<rect x="56" y="782" width="186" height="46" rx="8" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="149.0" y="801" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">Streamlit Cloud</text>
+<text x="149.0" y="818" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">demo UI</text>
+<rect x="252" y="782" width="186" height="46" rx="8" fill="#ECFDF3" stroke="#16A34A" stroke-width="1.6"/>
+<text x="345.0" y="801" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">Laptop</text>
+<text x="345.0" y="818" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">Docker Compose</text>
+<rect x="448" y="782" width="186" height="46" rx="8" fill="#FFF7E6" stroke="#D97706" stroke-width="1.6"/>
+<text x="541.0" y="801" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">Kaggle GPU</text>
+<text x="541.0" y="818" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">accuracy eval</text>
+<rect x="644" y="782" width="186" height="46" rx="8" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="737.0" y="801" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">Linux VM</text>
+<text x="737.0" y="818" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">Nginx + certbot</text>
+<rect x="840" y="782" width="186" height="46" rx="8" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="933.0" y="801" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">Azure</text>
+<text x="933.0" y="818" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">Container Apps, Bicep</text>
+<rect x="1036" y="782" width="186" height="46" rx="8" fill="#F4F5F7" stroke="#9CA3AF" stroke-width="1.6" stroke-dasharray="6 4"/>
+<text x="1129.0" y="801" font-size="13" font-weight="600" fill="#0F172A" text-anchor="middle">Kubernetes</text>
+<text x="1129.0" y="818" font-size="11" font-weight="normal" fill="#475569" text-anchor="middle">Helm, autoscaling</text>
+<text x="40" y="872" font-size="12" font-weight="normal" fill="#64748B" text-anchor="start">MIT licensed. Free and open source by default; paid cloud services are optional swap-ins. Synthetic data only.</text>
+</svg>
