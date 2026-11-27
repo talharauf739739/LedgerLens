@@ -7,4 +7,4 @@ maxUploadSize = 20  # MB, same limit as the API
 
 [theme]
 base = "light"
-primaryColor = "#2563eb"
+primaryColor = "#0F766E"  # deep teal from the logo (white text stays readable)

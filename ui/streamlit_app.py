@@ -85,9 +85,13 @@ RULE_ICON = {
     RuleStatus.SKIP: "⚪",
 }
 
+ASSETS = ROOT / "assets"
+LOGO = ASSETS / "logo.png"  # 450x158, navy background, rounded corners
+ICON = ASSETS / "icon.png"  # 128x128 mark: browser tab icon
+
 st.set_page_config(
     page_title="LedgerLens review",
-    page_icon="🧾",
+    page_icon=str(ICON) if ICON.exists() else "🧾",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -164,8 +168,11 @@ def show_read_only(parsed: ParsedDocument, pdf_bytes: bytes) -> None:
 
 
 with st.sidebar:
-    st.title("🧾 LedgerLens")
-    st.caption("Every extracted number has a receipt.")
+    if LOGO.exists():
+        st.image(str(LOGO), width="stretch")
+    else:  # e.g. a container image built without assets/
+        st.title("LedgerLens")
+        st.caption("Every value has a receipt.")
     if ALLOW_UPLOAD:
         mode = st.radio(
             "Source", ["Synthetic sample (replay, no LLM)", "Upload a document (PDF or image)"]
@@ -255,7 +262,7 @@ pdf_bytes: bytes = st.session_state["pdf"]
 
 failed = [r for r in doc.validation if r.status is RuleStatus.FAIL]
 attention = needs_attention(doc)
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4 = st.columns([1.6, 1, 1, 1])  # room for "bank statement"
 c1.metric("Document type", doc.doc_type.replace("_", " "), result.classification.method)
 c2.metric("Checks failed", len(failed))
 c3.metric("Need attention", len(attention))

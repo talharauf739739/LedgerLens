@@ -1,6 +1,6 @@
-# LedgerLens
-
-> **Every extracted number has a receipt.**
+<p align="center">
+  <img src="assets/logo.png" alt="LedgerLens: every value has a receipt" width="450">
+</p>
 
 [![LedgerLens architecture: entry points, the six-step agent workflow, the LLM provider layer, data services and deployment targets, each marked built, partly built or planned](docs/architecture.svg)](docs/ARCHITECTURE.md)
 
