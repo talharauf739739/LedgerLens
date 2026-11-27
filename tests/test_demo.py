@@ -4,7 +4,6 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-from streamlit.testing.v1 import AppTest
 
 from ledgerlens.pipeline.parse import parse_pdf
 from ledgerlens.pipeline.process import process_pdf
@@ -14,6 +13,8 @@ from synth.oracle import ReplayLLM
 from tests.helpers import perfect_draft
 from ui import components
 from ui.demo import SCENARIOS, hallucinate, pipeline_steps, proof, search_spans, stats
+
+AppTest = pytest.importorskip("streamlit.testing.v1").AppTest  # UI extra only
 
 APP = str(Path(__file__).resolve().parents[1] / "ui" / "streamlit_app.py")
 
