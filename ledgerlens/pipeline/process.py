@@ -29,7 +29,8 @@ class ProcessResult:
 
 
 async def process_pdf(data: bytes, doc_type: str | None, llm: Any) -> ProcessResult:
-    """`doc_type=None` lets the classifier decide."""
+    """`data` is a PDF or an image (JPEG, PNG, TIFF, ...); `doc_type=None` lets the
+    classifier decide."""
     from ledgerlens.agents.workflow import run_workflow
 
     job = await run_workflow(data, llm, doc_type)

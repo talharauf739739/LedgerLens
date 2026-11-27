@@ -28,11 +28,19 @@ Generate synthetic test documents (clean, scanned-looking and tampered, each wit
 uv run python -m synth --count 20   # -> data/synth/{bank_statement,invoice}/
 ```
 
-Run the full pipeline on one PDF (needs an LLM: Foundry Local, Ollama or Azure AI Foundry):
+Read any PDF or image (JPEG, PNG, TIFF, BMP, WebP) with the text layer or OCR, no LLM needed:
+
+```bash
+uv run ledgerlens read invoice_photo.jpg   # prints the page as Markdown, tables kept
+```
+
+Run the full pipeline on one PDF or image (needs an LLM: Foundry Local, Ollama or Azure AI Foundry):
 
 ```bash
 uv run ledgerlens extract statement.pdf --doc-type bank_statement -o result.json
 ```
+
+Images are turned into image-only PDF pages, so photos and scans take the same OCR path as scanned PDFs, and receipts are in the same page coordinates.
 
 Review UI (works offline in replay mode, no LLM needed):
 
@@ -41,13 +49,18 @@ uv sync --extra ui
 uv run streamlit run ui/streamlit_app.py
 ```
 
-Pick a synthetic sample, see every value boxed on the page, and try a *tampered* statement to watch reconciliation fail and the document go to review. Uploading your own PDF (which needs an LLM) is off by default; enable it locally with `LEDGERLENS_ALLOW_UPLOAD=1`.
+Pick a synthetic sample, see every value boxed on the page, and try a *tampered* statement to watch reconciliation fail and the document go to review. Uploading your own document is off by default; turn it on with `LEDGERLENS_ALLOW_UPLOAD=1`. Uploads accept PDF, JPEG, PNG, TIFF, BMP and WebP, and run in one of two modes:
+
+- **Read with OCR (no LLM):** the text and a box for every word (blue: PDF text layer, green: OCR, red: OCR unsure), the Markdown the extractor would get, and a document-type guess.
+- **Full extraction (needs an LLM):** fields, receipts, finance checks and review, as for the samples.
 
 ### Deploy the demo on Streamlit Community Cloud (free)
 
 1. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub and choose **Create app**.
 2. Repository: this repo · Branch: `main` · Main file path: `ui/streamlit_app.py`.
-3. **Advanced settings:** Python **3.12**. Don't set `LEDGERLENS_ALLOW_UPLOAD`: the public demo shows synthetic documents only.
+3. **Advanced settings:** Python **3.12**.
+   - **Public app:** leave `LEDGERLENS_ALLOW_UPLOAD` unset, so it shows synthetic documents only.
+   - **Private app** (Settings → Sharing → only invited viewers): to allow uploads, add `LEDGERLENS_ALLOW_UPLOAD = "1"` under **Secrets**. Without an LLM configured there, uploads run in *Read with OCR* mode.
 4. Deploy. Dependencies come from `ui/requirements.txt`; the first visit generates 12 synthetic samples (a few seconds).
 
 Vercel can't host Streamlit: its serverless functions don't keep the WebSocket connection Streamlit needs.

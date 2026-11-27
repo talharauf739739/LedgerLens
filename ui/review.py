@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from pydantic import Field as PydanticField
 
 from ledgerlens.normalize import clean_text, parse_country, parse_currency, parse_date, parse_money
+from ledgerlens.pipeline.spans import ParsedDocument
 from ledgerlens.rules import validate
 from ledgerlens.schemas import BaseDocument, RuleStatus
 from ledgerlens.schemas.base import Field, FieldStatus
@@ -247,3 +248,50 @@ def image_bytes(img: Image.Image) -> bytes:
     buf = io.BytesIO()
     img.save(buf, "PNG")
     return buf.getvalue()
+
+
+# --- read-only view (text layer / OCR, no LLM) -------------------------------------------
+
+ORIGIN_COLOR = {"pdf": (37, 99, 235), "ocr": (22, 163, 74)}  # blue: text layer, green: OCR
+LOW_CONFIDENCE = (220, 38, 38)  # red
+LOW_CONFIDENCE_BELOW = 0.8
+
+
+def span_highlights(parsed: ParsedDocument, page: int | None = None) -> list[Highlight]:
+    """A box per word: blue from the PDF text layer, green from OCR, red if OCR was unsure."""
+    return [
+        Highlight(
+            page=s.page,
+            bbox=s.bbox,
+            color=LOW_CONFIDENCE if s.confidence < LOW_CONFIDENCE_BELOW else ORIGIN_COLOR[s.origin],
+        )
+        for s in parsed.spans
+        if page is None or s.page == page
+    ]
+
+
+def span_rows(parsed: ParsedDocument) -> list[dict[str, Any]]:
+    return [
+        {
+            "page": s.page,
+            "text": s.text,
+            "source": "OCR" if s.origin == "ocr" else "text layer",
+            "confidence": round(s.confidence, 3),
+            "bbox": ", ".join(f"{v:.0f}" for v in s.bbox),
+        }
+        for s in parsed.spans
+    ]
+
+
+def page_summary(parsed: ParsedDocument) -> list[dict[str, Any]]:
+    return [
+        {
+            "page": p.number,
+            "read with": "OCR" if p.kind == "scanned" else "text layer",
+            "words": len(p.spans),
+            "lines": len(p.lines),
+            "skew (deg)": p.skew_deg,
+            "low-confidence words": sum(s.confidence < LOW_CONFIDENCE_BELOW for s in p.spans),
+        }
+        for p in parsed.pages
+    ]

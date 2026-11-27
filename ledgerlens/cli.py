@@ -65,13 +65,17 @@ async def _extract(data: bytes, doc_type: str | None) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):  # Windows consoles default to a legacy code page
+        sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="ledgerlens")
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("hello", help="Send one prompt to the configured LLM provider")
     sub.add_parser("init-storage", help="Create the blob container and jobs queue")
-    ex = sub.add_parser("extract", help="Parse, extract, ground and validate one PDF")
-    ex.add_argument("pdf")
+    ex = sub.add_parser(
+        "extract", help="Parse, extract, ground and validate one PDF or image (needs an LLM)"
+    )
+    ex.add_argument("pdf", help="PDF, JPEG, PNG, TIFF, BMP or WebP")
     ex.add_argument(
         "--doc-type",
         choices=["auto", "bank_statement", "invoice"],
@@ -79,9 +83,26 @@ def main(argv: list[str] | None = None) -> int:
         help="default: let the classifier decide",
     )
     ex.add_argument("-o", "--out", help="write JSON here instead of stdout")
+    rd = sub.add_parser(
+        "read", help="Read a PDF or image (text layer or OCR) and print Markdown; no LLM"
+    )
+    rd.add_argument("file", help="PDF, JPEG, PNG, TIFF, BMP or WebP")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
+    if args.command == "read":
+        from pathlib import Path
+
+        from ledgerlens.pipeline.parse import parse_pdf
+
+        parsed = parse_pdf(Path(args.file).read_bytes())
+        ocr = sum(p.kind == "scanned" for p in parsed.pages)
+        print(parsed.markdown)
+        print(
+            f"\n<!-- {len(parsed.pages)} page(s), {ocr} read with OCR, "
+            f"{len(parsed.spans)} words -->"
+        )
+        return 0
     if args.command == "extract":
         from pathlib import Path
 

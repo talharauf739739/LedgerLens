@@ -130,3 +130,16 @@ def test_uploads_can_be_enabled_locally(tmp_path: Path, monkeypatch: pytest.Monk
     at = AppTest.from_file(str(app), default_timeout=300).run()
     assert not at.exception
     assert [r for r in at.sidebar.radio if r.label == "Source"]
+
+
+def test_read_only_view_boxes_every_word_by_source() -> None:
+    from ledgerlens.pipeline.parse import parse_pdf
+    from ui.review import ORIGIN_COLOR, page_summary, span_highlights, span_rows
+
+    gen = GENERATORS["invoice"](2, "t")
+    parsed = parse_pdf(gen.pdf)
+    boxes = span_highlights(parsed, page=1)
+    assert len(boxes) == len([s for s in parsed.spans if s.page == 1])
+    assert {b.color for b in boxes} == {ORIGIN_COLOR["pdf"]}  # born-digital: text layer only
+    assert span_rows(parsed)[0]["source"] == "text layer"
+    assert page_summary(parsed)[0]["read with"] == "text layer"

@@ -1,4 +1,4 @@
-"""PDF -> pages of positioned spans -> lines -> Markdown.
+"""PDF or image -> pages of positioned spans -> lines -> Markdown.
 
 Per page: use the PDF text layer when it has real text (born-digital), else render the
 page and OCR it. Both paths produce the same `Span`s, so everything downstream (the
@@ -13,6 +13,7 @@ import logging
 import pypdfium2 as pdfium
 
 from ledgerlens.pipeline.digital import page_words
+from ledgerlens.pipeline.ingest import to_pdf
 from ledgerlens.pipeline.ocr import OCR_DPI, ocr_page
 from ledgerlens.pipeline.spans import Page, PageKind, ParsedDocument, group_lines, lines_to_markdown
 
@@ -33,6 +34,9 @@ def _page_kinds(pdf: pdfium.PdfDocument) -> list[tuple[PageKind, float, float]]:
 
 
 def parse_pdf(data: bytes, *, max_pages: int = 50) -> ParsedDocument:
+    """Accepts a PDF or an image (images are OCRed). `sha256` is of the bytes given."""
+    original = data
+    data = to_pdf(data, max_pages=max_pages)
     pdf = pdfium.PdfDocument(data)
     try:
         if len(pdf) > max_pages:
@@ -64,7 +68,7 @@ def parse_pdf(data: bytes, *, max_pages: int = 50) -> ParsedDocument:
 
     markdown = "\n\n".join(f"<!-- page {p.number} -->\n{lines_to_markdown(p.lines)}" for p in pages)
     return ParsedDocument(
-        sha256=hashlib.sha256(data).hexdigest(),
+        sha256=hashlib.sha256(original).hexdigest(),
         pages=pages,
         markdown=markdown,
         markdown_engine="lines",

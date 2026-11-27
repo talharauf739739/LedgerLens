@@ -6,8 +6,10 @@
 Replay mode runs the real pipeline (parse, classify, ground, rules) on synthetic samples with
 the ground truth standing in for the LLM, so it works offline on a small laptop.
 
-Uploads are off unless LEDGERLENS_ALLOW_UPLOAD=1: the public demo (Streamlit Community Cloud)
-must only ever show synthetic documents, and has no LLM anyway.
+Uploads (PDF, JPEG, PNG, TIFF, BMP, WebP) are off unless LEDGERLENS_ALLOW_UPLOAD=1. Turn them
+on only where viewers are restricted (a private Streamlit app, your laptop): a public demo
+must only ever show synthetic documents. Uploads run read-only (text layer + OCR, no LLM) or
+full extraction when an LLM is configured.
 """
 
 from __future__ import annotations
@@ -27,7 +29,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from ledgerlens.agents.classifier import classify  # noqa: E402
+from ledgerlens.pipeline.ingest import UPLOAD_EXTENSIONS, UnsupportedFile, to_pdf  # noqa: E402
+from ledgerlens.pipeline.parse import parse_pdf  # noqa: E402
 from ledgerlens.pipeline.process import ProcessResult, process_pdf  # noqa: E402
+from ledgerlens.pipeline.spans import ParsedDocument  # noqa: E402
 from ledgerlens.schemas import RuleStatus  # noqa: E402
 from synth.oracle import ReplayLLM, draft_from_truth  # noqa: E402
 from ui.review import (  # noqa: E402
@@ -39,9 +45,12 @@ from ui.review import (  # noqa: E402
     image_bytes,
     make_decision,
     needs_attention,
+    page_summary,
     render_page,
     row_records,
     save_decision,
+    span_highlights,
+    span_rows,
 )
 
 DATA_DIR = Path(os.environ.get("LEDGERLENS_DATA_DIR", ROOT / "data"))  # tests point this elsewhere
@@ -49,6 +58,13 @@ SYNTH_DIR = DATA_DIR / "synth"
 REVIEWS_DIR = DATA_DIR / "reviews"
 ALLOW_UPLOAD = os.environ.get("LEDGERLENS_ALLOW_UPLOAD") == "1"
 SAMPLES_PER_TYPE = 2  # x 2 types x 3 variants (clean, scanned, tampered) = 12 documents
+READ_ONLY = "Read with OCR (no LLM)"
+FULL = "Full extraction (needs an LLM)"
+RUN_HELP = (
+    "Read with OCR shows the text and a box for every word: the PDF text layer when there "
+    "is one, OCR for scans and photos. Full extraction also fills the schema with an LLM, "
+    "grounds every value and runs the finance checks."
+)
 RULE_ICON = {
     RuleStatus.PASS: "✅",
     RuleStatus.FAIL: "❌",
@@ -92,9 +108,46 @@ def run(pdf_bytes: bytes, llm: Any, doc_type: str | None) -> ProcessResult:
 
 
 def start(key: str, pdf_bytes: bytes, result: ProcessResult) -> None:
+    st.session_state.pop("parsed_only", None)
     st.session_state.update(
         key=key, pdf=pdf_bytes, result=result, doc=result.document, corrections=[], saved=None
     )
+
+
+def inspect(key: str, pdf_bytes: bytes, parsed: ParsedDocument) -> None:
+    st.session_state.pop("result", None)
+    st.session_state.update(key=key, pdf=pdf_bytes, parsed_only=parsed)
+
+
+def show_read_only(parsed: ParsedDocument, pdf_bytes: bytes) -> None:
+    """Text layer / OCR view of an upload: what the extractor would see, with boxes."""
+    scanned = sum(p.kind == "scanned" for p in parsed.pages)
+    guess = asyncio.run(classify(parsed.markdown))
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Pages", len(parsed.pages))
+    c2.metric("Read with OCR", scanned)
+    c3.metric("Words", len(parsed.spans))
+    c4.metric("Looks like", guess.doc_type.replace("_", " "), "keyword cues")
+    st.info(
+        "Read-only: text and word boxes, no LLM. Field extraction and finance checks run in "
+        "'Full extraction' once an LLM is configured."
+    )
+    left, right = st.columns([5, 6])
+    with right:
+        tab_text, tab_words, tab_pages = st.tabs(["Text", "Words", "Pages"])
+        with tab_text:
+            st.caption("The Markdown the extractor gets (tables keep their columns).")
+            st.code(parsed.markdown, language="markdown")
+        with tab_words:
+            st.dataframe(span_rows(parsed), hide_index=True, width="stretch")
+        with tab_pages:
+            st.dataframe(page_summary(parsed), hide_index=True, width="stretch")
+    with left:
+        pages = len(parsed.pages)
+        page = st.number_input("Page", 1, pages, value=1) if pages > 1 else 1
+        img = render_page(pdf_bytes, int(page), span_highlights(parsed, int(page)))
+        st.image(image_bytes(img), width="stretch")
+        st.caption("Blue: PDF text layer · Green: OCR · Red: OCR unsure (confidence < 0.8)")
 
 
 with st.sidebar:
@@ -102,7 +155,7 @@ with st.sidebar:
     st.caption("Every extracted number has a receipt.")
     if ALLOW_UPLOAD:
         mode = st.radio(
-            "Source", ["Synthetic sample (replay, no LLM)", "Upload a PDF (uses your LLM)"]
+            "Source", ["Synthetic sample (replay, no LLM)", "Upload a document (PDF or image)"]
         )
     else:
         mode = "Synthetic"
@@ -130,23 +183,40 @@ with st.sidebar:
                     data = choice.read_bytes()
                     start(str(choice), data, run(data, ReplayLLM(draft_from_truth(truth)), None))
     else:
-        upload = st.file_uploader("PDF (synthetic or public data only)", type=["pdf"])
-        dt = st.selectbox("Document type", ["auto", "bank_statement", "invoice"])
+        upload = st.file_uploader(
+            "Document: PDF or image (synthetic or public data only)", type=UPLOAD_EXTENSIONS
+        )
+        how = st.radio("Run", [READ_ONLY, FULL], help=RUN_HELP)
+        dt = "auto"
+        if how == FULL:
+            dt = st.selectbox("Document type", ["auto", "bank_statement", "invoice"])
         if upload is not None and st.button("Process", type="primary"):
-            data = upload.getvalue()
             try:
-                from ledgerlens.llm import get_llm_client
+                pdf = to_pdf(upload.getvalue())
+            except UnsupportedFile as exc:
+                st.error(str(exc))
+            else:
+                if how == READ_ONLY:
+                    with st.spinner("Reading the text (OCR for scans and photos)..."):
+                        inspect(upload.name, pdf, parse_pdf(pdf))
+                else:
+                    try:
+                        from ledgerlens.llm import get_llm_client
 
-                with st.spinner("Running the pipeline with your LLM..."):
-                    start(
-                        upload.name, data, run(data, get_llm_client(), None if dt == "auto" else dt)
-                    )
-            except Exception as exc:  # show the reason instead of a stack trace
-                st.error(
-                    f"Couldn't process with the configured LLM ({type(exc).__name__}: {exc}). "
-                    "Start Foundry Local or Ollama (see .env.example), or use replay mode."
-                )
+                        with st.spinner("Running the pipeline with your LLM..."):
+                            doc_type = None if dt == "auto" else dt
+                            start(upload.name, pdf, run(pdf, get_llm_client(), doc_type))
+                    except Exception as exc:  # show the reason instead of a stack trace
+                        st.error(
+                            f"Couldn't run full extraction ({type(exc).__name__}: {exc}). "
+                            "It needs an LLM (see .env.example); 'Read with OCR' works "
+                            "without one."
+                        )
 
+
+if "parsed_only" in st.session_state:
+    show_read_only(st.session_state["parsed_only"], st.session_state["pdf"])
+    st.stop()
 
 if "result" not in st.session_state:
     st.header("Review queue")
