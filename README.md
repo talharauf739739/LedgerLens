@@ -63,6 +63,8 @@ Pick a synthetic sample, see every value boxed on the page, and try a *tampered*
    - **Private app** (Settings → Sharing → only invited viewers): to allow uploads, add `LEDGERLENS_ALLOW_UPLOAD = "1"` under **Secrets**. Without an LLM configured there, uploads run in *Read with OCR* mode.
 4. Deploy. Dependencies come from `ui/requirements.txt`; the first visit generates 12 synthetic samples (a few seconds).
 
+After a push that changes files other than `ui/streamlit_app.py`, use **Manage app → Reboot app**: a live update can keep old copies of imported modules in memory and fail with an `ImportError`.
+
 Vercel can't host Streamlit: its serverless functions don't keep the WebSocket connection Streamlit needs.
 
 No GPU? [notebooks/kaggle_eval.ipynb](notebooks/kaggle_eval.ipynb) runs the extraction eval on a free Kaggle GPU with an open model.
