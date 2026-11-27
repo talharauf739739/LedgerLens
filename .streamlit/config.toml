@@ -8,3 +8,6 @@ maxUploadSize = 20  # MB, same limit as the API
 [theme]
 base = "light"
 primaryColor = "#0F766E"  # deep teal from the logo (white text stays readable)
+
+[client]
+toolbarMode = "minimal"  # hide the developer menu during demos

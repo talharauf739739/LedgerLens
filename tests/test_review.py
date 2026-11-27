@@ -101,19 +101,19 @@ def test_streamlit_page_runs_end_to_end(tmp_path: Path, monkeypatch: pytest.Monk
     at = AppTest.from_file(str(app), default_timeout=300).run()
     assert not at.exception
     assert len(list((tmp_path / "synth").glob("*/*.pdf"))) == 12
-    assert not [r for r in at.sidebar.radio if r.label == "Source"]  # no upload option
-    assert any("synthetic documents only" in i.value for i in at.sidebar.info)
+    assert "Upload your own document" not in at.sidebar.radio[0].options  # public: no uploads
+    assert any("synthetic documents only" in c.value for c in at.sidebar.caption)
 
-    sample = at.sidebar.selectbox[0]
-    sample.select(
-        next(o for o in sample.options if "bank_statement" in str(o) and "tampered" in str(o))
-    ).run()
-    at.sidebar.button[0].click().run()  # Process
+    # The first screen is the tampered statement, already processed and stopped.
+    assert at.sidebar.radio[0].value == "fraud"
+    page = " ".join(m.value for m in at.markdown)
+    assert "Needs review" in page and "What LedgerLens caught" in page
+    assert "Opening + money in - money out = closing balance" in page
+
+    next(t for t in at.text_input if t.label == "Reviewer").input("Test Reviewer")
+    next(b for b in at.button if b.label == "Reject").click().run()
     assert not at.exception
-    metrics = {m.label: m.value for m in at.metric}
-    assert metrics["Document type"] == "bank statement"
-    assert int(metrics["Checks failed"]) >= 1  # the planted amount breaks reconciliation
-    assert any("Needs review" in w.value for w in at.warning)
+    assert list((tmp_path / "reviews").glob("*.json"))
 
     next(t for t in at.text_input if t.label == "Reviewer").input("Test Reviewer")
     next(b for b in at.button if b.label == "Approve").click().run()
@@ -129,7 +129,7 @@ def test_uploads_can_be_enabled_locally(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("LEDGERLENS_ALLOW_UPLOAD", "1")
     at = AppTest.from_file(str(app), default_timeout=300).run()
     assert not at.exception
-    assert [r for r in at.sidebar.radio if r.label == "Source"]
+    assert "Upload your own document" in at.sidebar.radio[0].options
 
 
 def test_read_only_view_boxes_every_word_by_source() -> None:

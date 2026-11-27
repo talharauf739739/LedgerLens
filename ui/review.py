@@ -115,14 +115,24 @@ def row_records(doc: BaseDocument) -> list[dict[str, Any]]:
     return out
 
 
-def highlights(doc: BaseDocument, selected: str | None = None) -> list[Highlight]:
+FLAGGED = (220, 38, 38)  # red: a row that breaks a finance check
+
+
+def highlights(
+    doc: BaseDocument, selected: str | None = None, flagged_rows: frozenset[int] = frozenset()
+) -> list[Highlight]:
     hs = [
         Highlight(f.source.page, f.source.bbox, STATUS_COLOR[f.status], name == selected)
         for name, f in field_items(doc)
         if f.source is not None
     ]
     hs += [
-        Highlight(r.source.page, r.source.bbox, (100, 116, 139), f"row {i}" == selected)
+        Highlight(
+            r.source.page,
+            r.source.bbox,
+            FLAGGED if i in flagged_rows else (100, 116, 139),
+            f"row {i}" == selected,
+        )
         for i, r in enumerate(getattr(doc, rows_attr(doc)))
         if r.source is not None
     ]
@@ -295,3 +305,23 @@ def page_summary(parsed: ParsedDocument) -> list[dict[str, Any]]:
         }
         for p in parsed.pages
     ]
+
+
+def receipt_closeup(
+    pdf: bytes,
+    page: int,
+    bbox: tuple[float, float, float, float],
+    *,
+    scale: float = 3.0,
+    pad: tuple[float, float] = (150.0, 40.0),
+) -> Image.Image:
+    """A zoomed crop around one receipt, box drawn, for showing a value's source up close."""
+    img = render_page(pdf, page, [Highlight(page, bbox, SELECTED, True)], scale=scale)
+    x0, y0, x1, y1 = bbox
+    box = (
+        max(0, round((x0 - pad[0]) * scale)),
+        max(0, round((y0 - pad[1]) * scale)),
+        min(img.width, round((x1 + pad[0]) * scale)),
+        min(img.height, round((y1 + pad[1]) * scale)),
+    )
+    return img.crop(box)

@@ -46,14 +46,26 @@ uv run ledgerlens extract statement.pdf --doc-type bank_statement -o result.json
 
 Images are turned into image-only PDF pages, so photos and scans take the same OCR path as scanned PDFs, and receipts are in the same page coordinates.
 
-Review UI (works offline in replay mode, no LLM needed):
+Demo and review UI (works offline, no LLM needed):
 
 ```bash
 uv sync --extra ui
 uv run streamlit run ui/streamlit_app.py
 ```
 
-Pick a synthetic sample, see every value boxed on the page, and try a *tampered* statement to watch reconciliation fail and the document go to review. Uploading your own document is off by default; turn it on with `LEDGERLENS_ALLOW_UPLOAD=1`. Uploads accept PDF, JPEG, PNG, TIFF, BMP and WebP, and run in one of two modes:
+The sidebar offers one-click demo scenarios, each showing one capability:
+
+| Scenario | What the audience sees |
+| --- | --- |
+| Tampered bank statement | "What LedgerLens caught": the balance doesn't add up (off by the edited amount); the edited row is painted red on the page |
+| AI invents a number | "Typical AI pipeline" vs LedgerLens: the made-up closing balance is searched for, retried once, then removed and sent to review |
+| Clean bank statement | Ready to approve; click any value to light up its box and see a zoomed receipt close-up |
+| Scanned invoice | OCR on a tilted scan, every value still boxed exactly |
+| Hospital bill, lab report | Healthcare documents read with OCR; search any word and it lights up on the page |
+
+Each scenario has a direct link for presenting, e.g. `?demo=fraud`, `?demo=hallucination`, `?demo=clean`, `?demo=scan`, `?demo=hospital`, `?demo=lab`. Under every result: the step timeline, all finance checks in plain words, review (correct, approve, reject) and the JSON the API returns.
+
+Uploading your own document is off by default; turn it on with `LEDGERLENS_ALLOW_UPLOAD=1`. Uploads accept PDF, JPEG, PNG, TIFF, BMP and WebP, and run in one of two modes:
 
 - **Read with OCR (no LLM):** the text and a box for every word (blue: PDF text layer, green: OCR, red: OCR unsure), the Markdown the extractor would get, and a document-type guess.
 - **Full extraction (needs an LLM):** fields, receipts, finance checks and review, as for the samples.
